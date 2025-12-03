@@ -13,18 +13,18 @@ function generateToken(length = 12): string {
 const router = express.Router();
 
 // Create new project
-router.post('/project', (req, res) => {
+router.post('/project', async (req, res) => {
     const { name } = req.body;
     const token = generateToken();
-    const project = createProject(name, token);
+    const project = await createProject(token);
     res.json({ project, token });
 });
 
 // Join project session
-router.post('/join', (req, res) => {
+router.post('/join', async (req, res) => {
     const { token, member } = req.body;
-    addMember(token, member);
-    const project = getProject(token);
+    await addMember(token, member);
+    const project = await getProject(token);
     res.json({ project, role: 'Member' });
 });
 
