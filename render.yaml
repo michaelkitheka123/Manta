@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: manta-server
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: cd server && npm install && npm run build
+    startCommand: cd server && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+    
+  - type: web
+    name: manta-ai
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: cd ai && pip install -r requirements.txt
+    startCommand: cd ai && uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
