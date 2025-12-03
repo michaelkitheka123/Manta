@@ -26,7 +26,9 @@ export const initDB = async () => {
                 status VARCHAR(50),
                 commits_accepted INT DEFAULT 0,
                 tasks_completed INT DEFAULT 0,
-                lines_of_code INT DEFAULT 0
+                lines_of_code INT DEFAULT 0,
+                avatar_url TEXT,
+                github_id VARCHAR(50)
             );
 
             CREATE TABLE IF NOT EXISTS tasks (
@@ -54,21 +56,21 @@ export const getProject = async (id: string) => {
     const sessionRes = await query('SELECT id FROM sessions WHERE id = $1', [id]);
     if (sessionRes.rows.length === 0) return null;
 
-    const membersRes = await query('SELECT name FROM members WHERE session_id = $1', [id]);
+    const membersRes = await query('SELECT * FROM members WHERE session_id = $1', [id]);
     const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [id]);
 
     return {
         id,
-        members: membersRes.rows.map(r => r.name),
+        members: membersRes.rows,
         tasks: tasksRes.rows
     };
 };
 
-export const addMember = async (sessionId: string, memberName: string) => {
+export const addMember = async (sessionId: string, memberName: string, avatarUrl?: string, githubId?: string) => {
     await query(
-        `INSERT INTO members (id, session_id, name, role, status) 
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (id) DO NOTHING`,
-        [memberName, sessionId, memberName, 'Member', 'online']
+        `INSERT INTO members (id, session_id, name, role, status, avatar_url, github_id) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (id) DO UPDATE SET status = 'online'`,
+        [memberName, sessionId, memberName, 'Member', 'online', avatarUrl || null, githubId || null]
     );
 };

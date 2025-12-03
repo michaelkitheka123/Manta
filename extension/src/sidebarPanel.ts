@@ -82,6 +82,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 case 'declineReview':
                     await this.handleDeclineReview(data.reviewId);
                     break;
+                case 'logout':
+                    await this.state.logout();
+                    this.refresh();
+                    break;
             }
         });
     }
@@ -381,6 +385,32 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                     <input type="text" id="sessionToken" placeholder="Enter invite token" />
                 </div>
                 <button onclick="joinSession()">Join Session</button>
+            </div>
+
+            <div class="section">
+                <h2>👤 Authentication</h2>
+                ${this.state.getUser() ? `
+                    <div class="user-welcome">
+                        <img src="${this.state.getUser()?.avatarUrl || 'https://github.com/identicons/jason.png'}" class="user-avatar-small" />
+                        <div class="user-info">
+                            <span class="user-name">Welcome, ${this.state.getUser()?.name}</span>
+                            <span class="user-status">Logged in via GitHub</span>
+                        </div>
+                        <button onclick="logout()" class="logout-btn">Sign Out</button>
+                    </div>
+                ` : `
+                    <button onclick="loginWithGithub()" class="github-btn">
+                        <svg height="20" viewBox="0 0 16 16" version="1.1" width="20" aria-hidden="true" style="fill:white; margin-right:8px">
+                            <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                        </svg>
+                        Login with GitHub
+                    </button>
+                `}
+            </div>
+
+            <div class="kraken-footer">
+                <img src="${this._view?.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'extension', 'resources', 'kraken_logo.svg'))}" alt="Kraken Labs" />
+                <span>Powered by Kraken Labs</span>
             </div>
 
             <script>
@@ -772,7 +802,15 @@ Add your project description here.
 <body>
     ${shoal.html}
     <div class="header">
-        <h1>${project.name}</h1>
+        <div class="header-top">
+            <h1>${project.name}</h1>
+            ${this.state.getUser() ? `
+                <div class="user-badge">
+                    <img src="${this.state.getUser()?.avatarUrl}" class="user-avatar-tiny" />
+                    <span>${this.state.getUser()?.name}</span>
+                </div>
+            ` : ''}
+        </div>
         <div class="status"><div class="status-dot"></div> Live Session Active</div>
         <div class="token-container">
             <span class="project-token">Token: ${project.token}</span>
@@ -846,6 +884,11 @@ Add your project description here.
         </button>
     </div>
 
+    <div class="kraken-footer">
+        <img src="${this._view?.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'extension', 'resources', 'kraken_logo.svg'))}" alt="Kraken Labs" />
+        <span>Powered by Kraken Labs</span>
+    </div>
+
     ${this._getCommonScripts()}
     <script>
         ${shoal.script}
@@ -884,7 +927,15 @@ Add your project description here.
 <body>
     ${shoal.html}
     <div class="header">
-        <h1>⚡ Manta <span style="font-size:12px;opacity:0.8">(Member)</span></h1>
+        <div class="header-top">
+            <h1>⚡ Manta <span style="font-size:12px;opacity:0.8">(Member)</span></h1>
+            ${this.state.getUser() ? `
+                <div class="user-badge">
+                    <img src="${this.state.getUser()?.avatarUrl}" class="user-avatar-tiny" />
+                    <span>${this.state.getUser()?.name}</span>
+                </div>
+            ` : ''}
+        </div>
         <div class="status">
             <span class="status-dot"></span>
             <span>Connected</span>
@@ -926,6 +977,11 @@ Add your project description here.
             <span class="command-icon">🎨</span>
             <span>Commit Styles</span>
         </button>
+    </div>
+
+    <div class="kraken-footer">
+        <img src="${this._view?.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'extension', 'resources', 'kraken_logo.svg'))}" alt="Kraken Labs" />
+        <span>Powered by Kraken Labs</span>
     </div>
 
     ${this._getCommonScripts()}
@@ -1003,6 +1059,26 @@ Add your project description here.
             opacity: 0.6;
             cursor: not-allowed;
         }
+        
+        /* Auth & Branding Styles */
+        .github-btn { width: 100%; padding: 12px; background: #24292e; color: white; border: none; border-radius: 6px; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s; }
+        .github-btn:hover { background: #2f363d; transform: translateY(-1px); }
+        
+        .user-welcome { display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; }
+        .user-avatar-small { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #667eea; }
+        .user-info { flex: 1; display: flex; flex-direction: column; }
+        .user-name { font-weight: 600; font-size: 13px; }
+        .user-status { font-size: 11px; color: var(--vscode-descriptionForeground); }
+        .logout-btn { padding: 4px 8px; background: transparent; border: 1px solid rgba(255,255,255,0.2); color: var(--vscode-descriptionForeground); border-radius: 4px; font-size: 10px; cursor: pointer; }
+        .logout-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .user-badge { display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: rgba(0,0,0,0.2); border-radius: 20px; font-size: 11px; }
+        .user-avatar-tiny { width: 16px; height: 16px; border-radius: 50%; }
+
+        .kraken-footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; align-items: center; gap: 8px; opacity: 0.7; }
+        .kraken-footer img { height: 24px; }
+        .kraken-footer span { font-size: 10px; color: var(--vscode-descriptionForeground); letter-spacing: 1px; text-transform: uppercase; }
     </style>`;
     }
 
@@ -1106,6 +1182,19 @@ Add your project description here.
                 btn.classList.add('copied');
                 setTimeout(() => { btn.textContent = originalText; btn.classList.remove('copied'); }, 2000);
             }).catch(err => { console.error('Failed to copy:', err); alert('Token copied: ' + token); });
+        }
+
+        function loginWithGithub() {
+            // Redirect to server auth endpoint
+            // Assuming server URL is known or passed. For now using hardcoded production URL or localhost
+            // Ideally this should be dynamic.
+            const serverUrl = 'https://web-production-9466f.up.railway.app'; // Or http://localhost:3000 for dev
+            vscode.env.openExternal(vscode.Uri.parse(serverUrl + '/auth/github'));
+        }
+
+        function logout() {
+            // Clear local state via message
+            vscode.postMessage({ type: 'logout' });
         }
     </script>`;
     }

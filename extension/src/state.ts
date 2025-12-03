@@ -2,6 +2,12 @@ import * as vscode from 'vscode';
 import { Task, AISuggestion, Project, UserRole, DependencyGraph } from '../../shared/ts-types';
 import { log } from './utils';
 
+export interface User {
+    id: string;
+    name: string;
+    avatarUrl?: string;
+}
+
 export class ExtensionState {
     private context: vscode.ExtensionContext;
 
@@ -10,6 +16,9 @@ export class ExtensionState {
 
     // Current user role: 'Navigator' | 'Member'
     private role: UserRole | null = null;
+
+    // Current authenticated user
+    private user: User | null = null;
 
     // Active tasks for this project
     private tasks: Task[] = [];
@@ -34,7 +43,32 @@ export class ExtensionState {
 
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
+        // Restore user from global state
+        const savedUser = this.context.globalState.get<User>('manta_user');
+        if (savedUser) {
+            this.user = savedUser;
+            log(`Restored user session: ${savedUser.name}`);
+        }
         log('ExtensionState initialized.');
+    }
+
+    // -----------------------------
+    // User Management
+    // -----------------------------
+    async setUser(user: User) {
+        this.user = user;
+        await this.context.globalState.update('manta_user', user);
+        log(`User authenticated: ${user.name}`);
+    }
+
+    getUser(): User | null {
+        return this.user;
+    }
+
+    async logout() {
+        this.user = null;
+        await this.context.globalState.update('manta_user', undefined);
+        log('User logged out.');
     }
 
     // -----------------------------

@@ -52,8 +52,21 @@ Or set in VS Code:
    - Value: `your_api_key_here`
 4. Railway will redeploy automatically
 
-### 6. Test
+### 6. Configure GitHub OAuth (Required for Auth)
+1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
+2. Click **New OAuth App**
+3. **Application Name**: Manta
+4. **Homepage URL**: `https://<your-railway-app-url>`
+5. **Authorization callback URL**: `https://<your-railway-app-url>/auth/callback`
+6. Click **Register application**
+7. Copy **Client ID** and generate **Client Secret**
+8. In Railway, add variables:
+   - `GITHUB_CLIENT_ID`: (Your Client ID)
+   - `GITHUB_CLIENT_SECRET`: (Your Client Secret)
+
+### 7. Test
 - Reload extension (F5)
+- Click "Login with GitHub"
 - Create/join a session
 - Test from another device!
 

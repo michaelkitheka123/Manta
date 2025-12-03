@@ -50,6 +50,32 @@ export async function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(
             vscode.window.registerWebviewViewProvider('manta.sidebarPanel', sidebarProvider)
         );
+
+        // Register URI Handler for OAuth
+        context.subscriptions.push(
+            vscode.window.registerUriHandler({
+                handleUri(uri: vscode.Uri): vscode.ProviderResult<void> {
+                    if (uri.path === '/auth') {
+                        const query = new URLSearchParams(uri.query);
+                        const token = query.get('token');
+                        const name = query.get('name');
+                        const avatar = query.get('avatar');
+                        const id = query.get('id');
+
+                        if (token && name && id) {
+                            state.setUser({
+                                id,
+                                name: decodeURIComponent(name),
+                                avatarUrl: avatar ? decodeURIComponent(avatar) : undefined
+                            });
+                            vscode.window.showInformationMessage(`Welcome back, ${decodeURIComponent(name)}!`);
+                            sidebarProvider.refresh();
+                        }
+                    }
+                }
+            })
+        );
+
         log(`✅ Sidebar registered in ${Date.now() - sidebarStart}ms`);
 
         // Store provider in state or global var to access it later
