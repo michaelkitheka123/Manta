@@ -135,6 +135,12 @@ manta/
 - `manta.serverUrl`: WebSocket URL of the backend server (default: `ws://localhost:3000`)
 - `manta.aiServerUrl`: HTTP URL of the AI service (default: `http://localhost:8000`)
 
+## ☁️ Cloud Deployment
+
+See `DEPLOY.md` for quick deployment instructions or `deployment_guide.md` for comprehensive guide.
+
+Deploy to Railway or Render to enable worldwide collaboration!
+
 ## 🐛 Troubleshooting
 
 ### Extension won't activate
@@ -162,4 +168,4 @@ manta/
 - [ ] Add authentication and authorization
 - [ ] Bundle React UI components
 - [ ] Add comprehensive tests
-- [ ] Deploy to production
+- [x] Deploy to production (Railway/Render ready)
