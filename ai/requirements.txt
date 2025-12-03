@@ -2,3 +2,5 @@ fastapi
 uvicorn
 pydantic
 typing-extensions
+google-generativeai
+python-dotenv

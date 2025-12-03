@@ -36,7 +36,15 @@ Or set in VS Code:
 - Settings → Search "Manta: Server URL"
 - Enter: `wss://YOUR-APP.railway.app`
 
-### 4. Test
+### 4. Configure AI (Optional but Recommended)
+1. Get a free API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. In Railway, go to your project → **Variables**
+3. Add a new variable:
+   - Key: `GEMINI_API_KEY`
+   - Value: `your_api_key_here`
+4. Railway will redeploy automatically
+
+### 5. Test
 - Reload extension (F5)
 - Create/join a session
 - Test from another device!
