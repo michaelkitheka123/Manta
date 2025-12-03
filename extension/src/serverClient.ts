@@ -11,7 +11,7 @@ export class ServerClient {
 
     constructor(state: ExtensionState) {
         this.state = state;
-        this.serverUrl = vscode.workspace.getConfiguration('manta').get('serverUrl', 'ws://localhost:3000');
+        this.serverUrl = vscode.workspace.getConfiguration('manta').get('serverUrl', 'wss://web-production-9466f.up.railway.app');
     }
 
     // -----------------------------
