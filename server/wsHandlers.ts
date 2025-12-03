@@ -1,6 +1,7 @@
 import WebSocket, { WebSocketServer } from 'ws';
-import { db } from './db';
+import { query } from './db';
 import { log } from './utils';
+import { v4 as uuidv4 } from 'uuid';
 
 interface Client {
     ws: WebSocket;
@@ -15,40 +16,99 @@ export function setupWebSocket(server: any) {
     log('WebSocket server running.');
 
     wss.on('connection', (ws) => {
-        ws.on('message', (msg) => {
+        ws.on('message', async (msg) => {
             try {
                 const data = JSON.parse(msg.toString());
-                handleMessage(ws, data);
+                await handleMessage(ws, data);
             } catch (err) {
                 console.error('WS parse error:', err);
+            }
+        });
+
+        ws.on('close', () => {
+            // Remove client from list on disconnect
+            const index = clients.findIndex(c => c.ws === ws);
+            if (index !== -1) {
+                clients.splice(index, 1);
             }
         });
     });
 }
 
-function handleMessage(ws: WebSocket, data: any) {
+async function handleMessage(ws: WebSocket, data: any) {
     switch (data.type) {
         case 'session:create':
             // Already created via REST, nothing needed
             break;
         case 'session:join':
-            const { token, member } = data.payload;
-            clients.push({ ws, token, member });
-            db.projects[token].members.push(member);
-            broadcast(token, { type: 'members:update', payload: db.projects[token].members });
-            ws.send(JSON.stringify({ type: 'session:joined', payload: { project: db.projects[token], role: 'Member' } }));
+            try {
+                const { token, member } = data.payload;
+                clients.push({ ws, token, member });
+
+                // Add member to DB
+                await query(
+                    `INSERT INTO members (id, session_id, name, role, status) 
+                     VALUES ($1, $2, $3, $4, $5)
+                     ON CONFLICT (id) DO NOTHING`,
+                    [member, token, member, 'Member', 'online']
+                );
+
+                // Fetch current state
+                const membersRes = await query('SELECT name FROM members WHERE session_id = $1', [token]);
+                const members = membersRes.rows.map(r => r.name);
+
+                const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [token]);
+                const tasks = tasksRes.rows;
+
+                // Broadcast update
+                broadcast(token, { type: 'members:update', payload: members });
+
+                // Send initial state to joiner
+                ws.send(JSON.stringify({
+                    type: 'session:joined',
+                    payload: {
+                        project: { id: token, members, tasks },
+                        role: 'Member'
+                    }
+                }));
+            } catch (err) {
+                console.error('Error joining session:', err);
+            }
             break;
+
         case 'task:assign':
-            const { taskName, assignee } = data.payload;
-            const project = db.projects[data.token];
-            project.tasks.push({ name: taskName, assignee, status: 'pending' });
-            broadcast(data.token, { type: 'tasks:update', payload: project.tasks });
+            try {
+                const { taskName, assignee } = data.payload;
+                const taskId = uuidv4();
+
+                await query(
+                    `INSERT INTO tasks (id, session_id, title, status, assigned_to) 
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [taskId, data.token, taskName, 'pending', assignee]
+                );
+
+                const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [data.token]);
+                broadcast(data.token, { type: 'tasks:update', payload: tasksRes.rows });
+            } catch (err) {
+                console.error('Error assigning task:', err);
+            }
             break;
+
         case 'task:approve':
-            const task = db.projects[data.token].tasks.find((t: any) => t.name === data.payload.taskName);
-            if (task) task.status = 'complete';
-            broadcast(data.token, { type: 'tasks:update', payload: db.projects[data.token].tasks });
+            try {
+                const { taskName } = data.payload;
+                await query(
+                    `UPDATE tasks SET status = 'complete' WHERE session_id = $1 AND title = $2`,
+                    [data.token, taskName]
+                );
+
+                const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [data.token]);
+                broadcast(data.token, { type: 'tasks:update', payload: tasksRes.rows });
+            } catch (err) {
+                console.error('Error approving task:', err);
+            }
             break;
+
         case 'file:commit':
             // Optional: persist commit in memory or real DB
             break;
@@ -62,6 +122,8 @@ function handleMessage(ws: WebSocket, data: any) {
 
 function broadcast(token: string, message: any) {
     clients.filter((c) => c.token === token).forEach((c) => {
-        c.ws.send(JSON.stringify(message));
+        if (c.ws.readyState === WebSocket.OPEN) {
+            c.ws.send(JSON.stringify(message));
+        }
     });
 }

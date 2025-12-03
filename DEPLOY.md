@@ -36,7 +36,15 @@ Or set in VS Code:
 - Settings → Search "Manta: Server URL"
 - Enter: `wss://YOUR-APP.railway.app`
 
-### 4. Configure AI (Optional but Recommended)
+### 4. Configure Database (Required for Persistence)
+1. In Railway, click "New" → "Database" → "Add PostgreSQL"
+2. Wait for it to deploy
+3. Click on your **Manta** service → "Settings" → "Variables"
+4. Click "New Variable" → "Add Reference"
+5. Select `DATABASE_URL` from your PostgreSQL service
+6. Railway will redeploy automatically
+
+### 5. Configure AI (Optional but Recommended)
 1. Get a free API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
 2. In Railway, go to your project → **Variables**
 3. Add a new variable:
@@ -44,7 +52,7 @@ Or set in VS Code:
    - Value: `your_api_key_here`
 4. Railway will redeploy automatically
 
-### 5. Test
+### 6. Test
 - Reload extension (F5)
 - Create/join a session
 - Test from another device!
