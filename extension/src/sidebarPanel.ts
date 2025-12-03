@@ -409,8 +409,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             </div>
 
             <div class="kraken-footer">
-                <img src="${this._view?.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'extension', 'resources', 'kraken_logo.svg'))}" alt="Kraken Labs" />
-                <span>Powered by Kraken Labs</span>
+                <div class="kraken-logo-text">
+                    <div class="kraken-title">KRAKEN</div>
+                    <div class="kraken-subtitle">
+                        <span class="line"></span>
+                        <span class="labs-text">LABS</span>
+                        <span class="line"></span>
+                    </div>
+                </div>
             </div>
 
             <script>
@@ -885,8 +891,14 @@ Add your project description here.
     </div>
 
     <div class="kraken-footer">
-        <img src="${this._view?.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'extension', 'resources', 'kraken_logo.svg'))}" alt="Kraken Labs" />
-        <span>Powered by Kraken Labs</span>
+        <div class="kraken-logo-text">
+            <div class="kraken-title">KRAKEN</div>
+            <div class="kraken-subtitle">
+                <span class="line"></span>
+                <span class="labs-text">LABS</span>
+                <span class="line"></span>
+            </div>
+        </div>
     </div>
 
     ${this._getCommonScripts()}
@@ -980,8 +992,14 @@ Add your project description here.
     </div>
 
     <div class="kraken-footer">
-        <img src="${this._view?.webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'extension', 'resources', 'kraken_logo.svg'))}" alt="Kraken Labs" />
-        <span>Powered by Kraken Labs</span>
+        <div class="kraken-logo-text">
+            <div class="kraken-title">KRAKEN</div>
+            <div class="kraken-subtitle">
+                <span class="line"></span>
+                <span class="labs-text">LABS</span>
+                <span class="line"></span>
+            </div>
+        </div>
     </div>
 
     ${this._getCommonScripts()}
@@ -1076,9 +1094,12 @@ Add your project description here.
         .user-badge { display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: rgba(0,0,0,0.2); border-radius: 20px; font-size: 11px; }
         .user-avatar-tiny { width: 16px; height: 16px; border-radius: 50%; }
 
-        .kraken-footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; align-items: center; gap: 8px; opacity: 0.7; }
-        .kraken-footer img { height: 24px; }
-        .kraken-footer span { font-size: 10px; color: var(--vscode-descriptionForeground); letter-spacing: 1px; text-transform: uppercase; }
+        .kraken-footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: center; opacity: 0.9; }
+        .kraken-logo-text { text-align: center; }
+        .kraken-title { font-size: 24px; font-weight: 800; letter-spacing: 6px; text-transform: uppercase; background: linear-gradient(to bottom, #ff4500, #cc0000); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 2px; }
+        .kraken-subtitle { display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .labs-text { font-size: 10px; font-weight: 600; letter-spacing: 3px; color: #ff4500; text-transform: uppercase; opacity: 0.8; }
+        .line { height: 1px; width: 30px; background: linear-gradient(90deg, transparent, #ff4500, transparent); opacity: 0.5; }
     </style>`;
     }
 
