@@ -1094,12 +1094,12 @@ Add your project description here.
         .user-badge { display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: rgba(0,0,0,0.2); border-radius: 20px; font-size: 11px; }
         .user-avatar-tiny { width: 16px; height: 16px; border-radius: 50%; }
 
-        .kraken-footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: center; opacity: 0.9; }
-        .kraken-logo-text { text-align: center; }
-        .kraken-title { font-size: 24px; font-weight: 800; letter-spacing: 6px; text-transform: uppercase; background: linear-gradient(to bottom, #ff4500, #cc0000); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 2px; }
-        .kraken-subtitle { display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .labs-text { font-size: 10px; font-weight: 600; letter-spacing: 3px; color: #ff4500; text-transform: uppercase; opacity: 0.8; }
-        .line { height: 1px; width: 30px; background: linear-gradient(90deg, transparent, #ff4500, transparent); opacity: 0.5; }
+        .kraken-footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: center; opacity: 1; }
+        .kraken-logo-text { text-align: center; padding: 8px 0; }
+        .kraken-title { font-size: 32px; font-weight: 900; letter-spacing: 8px; text-transform: uppercase; background: linear-gradient(180deg, #ff6b35 0%, #ff4500 50%, #cc0000 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; color: #ff4500; margin-bottom: 4px; text-shadow: 0 0 20px rgba(255, 69, 0, 0.3); }
+        .kraken-subtitle { display: flex; align-items: center; justify-content: center; gap: 12px; }
+        .labs-text { font-size: 13px; font-weight: 700; letter-spacing: 4px; color: #ff6b35; text-transform: uppercase; opacity: 0.9; }
+        .line { height: 1.5px; width: 40px; background: linear-gradient(90deg, transparent, #ff6b35, #ff4500, #ff6b35, transparent); opacity: 0.6; }
     </style>`;
     }
 

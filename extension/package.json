@@ -1,9 +1,24 @@
 {
     "name": "manta",
-    "displayName": "Manta IDE Flow",
-    "description": "An intelligent, collaborative VS Code extension for real-time project flow and AI-assisted development.",
+    "displayName": "Manta - AI Collaborative Coding",
+    "description": "Real-time collaborative coding with AI-powered task assignment, code review, and team analytics. Built by Kraken Labs.",
     "version": "1.0.0",
-    "publisher": "your-name",
+    "publisher": "kraken-labs",
+    "icon": "resources/icon.png",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/michaelkitheka123/Manta.git"
+    },
+    "license": "MIT",
+    "keywords": [
+        "collaboration",
+        "ai",
+        "code-review",
+        "team",
+        "productivity",
+        "real-time",
+        "websocket"
+    ],
     "engines": {
         "vscode": "^1.80.0"
     },
@@ -83,10 +98,9 @@
         }
     },
     "scripts": {
-        "vscode:prepublish": "npm run package",
+        "vscode:prepublish": "npm run compile",
         "compile": "node esbuild.js",
-        "watch": "node esbuild.js --watch",
-        "package": "vsce package"
+        "watch": "node esbuild.js --watch"
     },
     "devDependencies": {
         "@types/node": "^20.19.25",
