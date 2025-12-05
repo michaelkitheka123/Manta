@@ -43,6 +43,34 @@ async function handleMessage(ws: WebSocket, data: any) {
         case 'session:join':
             try {
                 const { token, member } = data.payload;
+
+                // Validation
+                if (!token || !member) {
+                    console.log('[WS JOIN FAILED] Missing required fields');
+                    ws.send(JSON.stringify({
+                        type: 'session:error',
+                        payload: {
+                            error: 'Missing required fields',
+                            message: 'Token and member name are required'
+                        }
+                    }));
+                    return;
+                }
+
+                // Check if session exists
+                const sessionCheck = await query('SELECT id FROM sessions WHERE id = $1', [token]);
+                if (sessionCheck.rows.length === 0) {
+                    console.log(`[WS JOIN FAILED] Invalid token: ${token}`);
+                    ws.send(JSON.stringify({
+                        type: 'session:error',
+                        payload: {
+                            error: 'Session not found',
+                            message: 'Invalid invite token. Please check and try again.'
+                        }
+                    }));
+                    return;
+                }
+
                 clients.push({ ws, token, member });
 
                 // Add member to DB
@@ -54,25 +82,56 @@ async function handleMessage(ws: WebSocket, data: any) {
                 );
 
                 // Fetch current state
-                const membersRes = await query('SELECT name FROM members WHERE session_id = $1', [token]);
-                const members = membersRes.rows.map(r => r.name);
-
+                const sessionRes = await query('SELECT id FROM sessions WHERE id = $1', [token]);
+                const membersRes = await query('SELECT * FROM members WHERE session_id = $1', [token]);
                 const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [token]);
-                const tasks = tasksRes.rows;
 
                 // Broadcast update
-                broadcast(token, { type: 'members:update', payload: members });
+                broadcast(token, { type: 'members:update', payload: membersRes.rows });
 
                 // Send initial state to joiner
                 ws.send(JSON.stringify({
                     type: 'session:joined',
                     payload: {
-                        project: { id: token, members, tasks },
+                        project: {
+                            name: `Project ${token.substring(0, 6)}`, // Generate a name from token
+                            token: token,
+                            members: membersRes.rows,
+                            tasks: tasksRes.rows
+                        },
                         role: 'Member'
                     }
                 }));
+
+                console.log(`[WS JOIN SUCCESS] ${member} joined session ${token}`);
             } catch (err) {
-                console.error('Error joining session:', err);
+                console.error('[WS JOIN ERROR]', err);
+                ws.send(JSON.stringify({
+                    type: 'session:error',
+                    payload: {
+                        error: 'Server error',
+                        message: 'Failed to join session. Please try again later.'
+                    }
+                }));
+            }
+            break;
+
+        case 'task:create':
+            try {
+                const task = data.payload;
+                const taskId = task.id || uuidv4();
+
+                await query(
+                    `INSERT INTO tasks (id, session_id, title, status, assigned_to) 
+                     VALUES ($1, $2, $3, $4, $5)
+                     ON CONFLICT (id) DO NOTHING`,
+                    [taskId, data.token, task.name, task.status || 'pending', task.assignedTo || null]
+                );
+
+                const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [data.token]);
+                broadcast(data.token, { type: 'tasks:update', payload: tasksRes.rows });
+            } catch (err) {
+                console.error('Error creating task:', err);
             }
             break;
 

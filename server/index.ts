@@ -10,7 +10,8 @@ import { initDB } from './db';
 
 const app = express();
 app.use(bodyParser.json());
-app.use('/api', router);
+// Mount routes at root level (OAuth needs /auth/github, not /api/auth/github)
+app.use('/', router);
 
 const server = http.createServer(app);
 setupWebSocket(server);

@@ -22,10 +22,42 @@ router.post('/project', async (req, res) => {
 
 // Join project session
 router.post('/join', async (req, res) => {
-    const { token, member } = req.body;
-    await addMember(token, member);
-    const project = await getProject(token);
-    res.json({ project, role: 'Member' });
+    try {
+        const { token, member } = req.body;
+
+        // Validation
+        if (!token || !member) {
+            console.log('[JOIN FAILED] Missing required fields');
+            return res.status(400).json({
+                error: 'Missing required fields',
+                message: 'Token and member name are required'
+            });
+        }
+
+        // Check if session exists
+        const session = await getProject(token);
+        if (!session) {
+            console.log(`[JOIN FAILED] Invalid token: ${token}`);
+            return res.status(404).json({
+                error: 'Session not found',
+                message: 'Invalid invite token. Please check and try again.'
+            });
+        }
+
+        // Add member to session
+        await addMember(token, member);
+        const project = await getProject(token);
+
+        console.log(`[JOIN SUCCESS] ${member} joined session ${token}`);
+        res.json({ project, role: 'Member' });
+
+    } catch (err) {
+        console.error('[JOIN ERROR]', err);
+        res.status(500).json({
+            error: 'Server error',
+            message: 'Failed to join session. Please try again later.'
+        });
+    }
 });
 
 // Health check
@@ -68,8 +100,8 @@ router.get('/auth/callback', async (req, res) => {
 
         // Redirect back to VS Code
         // Scheme: vscode://<publisher>.<extension>/auth?token=...&name=...&avatar=...
-        // Assuming publisher is 'kraken' and extension is 'manta'
-        const vsCodeUri = `vscode://kraken.manta/auth?token=${accessToken}&id=${user.login}&name=${encodeURIComponent(user.name || user.login)}&avatar=${encodeURIComponent(user.avatar_url)}`;
+        // Publisher is 'kraken-labs' and extension is 'manta'
+        const vsCodeUri = `vscode://kraken-labs.manta/auth?token=${accessToken}&id=${user.login}&name=${encodeURIComponent(user.name || user.login)}&avatar=${encodeURIComponent(user.avatar_url)}`;
 
         res.send(`
             <h1>Login Successful!</h1>
