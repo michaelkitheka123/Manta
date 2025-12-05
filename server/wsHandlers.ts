@@ -38,7 +38,69 @@ export function setupWebSocket(server: any) {
 async function handleMessage(ws: WebSocket, data: any) {
     switch (data.type) {
         case 'session:create':
-            // Already created via REST, nothing needed
+            try {
+                const { projectName, token, member } = data.payload;
+
+                // Validation
+                if (!projectName || !token || !member) {
+                    console.log('[WS CREATE FAILED] Missing required fields');
+                    ws.send(JSON.stringify({
+                        type: 'session:error',
+                        payload: {
+                            error: 'Missing required fields',
+                            message: 'Project name, token, and member name are required'
+                        }
+                    }));
+                    return;
+                }
+
+                // Create session in database
+                await query(
+                    `INSERT INTO sessions (id, created_at) VALUES ($1, NOW())
+                     ON CONFLICT (id) DO NOTHING`,
+                    [token]
+                );
+
+                // Add creator as first member with 'lead' role
+                await query(
+                    `INSERT INTO members (id, session_id, name, role, status) 
+                     VALUES ($1, $2, $3, $4, $5)
+                     ON CONFLICT (id) DO NOTHING`,
+                    [member, token, member, 'lead', 'online']
+                );
+
+                // Add client to clients array
+                clients.push({ ws, token, member });
+
+                // Fetch current state
+                const membersRes = await query('SELECT * FROM members WHERE session_id = $1', [token]);
+                const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [token]);
+
+                // Send success response to creator
+                ws.send(JSON.stringify({
+                    type: 'session:joined',
+                    payload: {
+                        project: {
+                            name: projectName,
+                            token: token,
+                            members: membersRes.rows,
+                            tasks: tasksRes.rows
+                        },
+                        role: 'lead'
+                    }
+                }));
+
+                console.log(`[WS CREATE SUCCESS] ${member} created project "${projectName}" with token ${token}`);
+            } catch (err) {
+                console.error('[WS CREATE ERROR]', err);
+                ws.send(JSON.stringify({
+                    type: 'session:error',
+                    payload: {
+                        error: 'Server error',
+                        message: 'Failed to create project. Please try again later.'
+                    }
+                }));
+            }
             break;
         case 'session:join':
             try {
