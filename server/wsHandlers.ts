@@ -56,9 +56,9 @@ async function handleMessage(ws: WebSocket, data: any) {
 
                 // Create session in database
                 await query(
-                    `INSERT INTO sessions (id, created_at) VALUES ($1, NOW())
+                    `INSERT INTO sessions (id, name, created_at) VALUES ($1, $2, NOW())
                      ON CONFLICT (id) DO NOTHING`,
-                    [token]
+                    [token, projectName]
                 );
 
                 // Add creator as first member with 'lead' role
@@ -144,9 +144,10 @@ async function handleMessage(ws: WebSocket, data: any) {
                 );
 
                 // Fetch current state
-                const sessionRes = await query('SELECT id FROM sessions WHERE id = $1', [token]);
+                const sessionRes = await query('SELECT id, name FROM sessions WHERE id = $1', [token]);
                 const membersRes = await query('SELECT * FROM members WHERE session_id = $1', [token]);
                 const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [token]);
+                const reviewsRes = await query('SELECT * FROM reviews WHERE session_id = $1 ORDER BY created_at DESC', [token]);
 
                 // Broadcast update
                 broadcast(token, { type: 'members:update', payload: membersRes.rows });
@@ -156,10 +157,11 @@ async function handleMessage(ws: WebSocket, data: any) {
                     type: 'session:joined',
                     payload: {
                         project: {
-                            name: `Project ${token.substring(0, 6)}`, // Generate a name from token
+                            name: sessionRes.rows[0].name || `Project ${token.substring(0, 6)}`, // Use DB name or fallback
                             token: token,
                             members: membersRes.rows,
-                            tasks: tasksRes.rows
+                            tasks: tasksRes.rows,
+                            reviews: reviewsRes.rows
                         },
                         role: 'Member'
                     }
@@ -183,15 +185,18 @@ async function handleMessage(ws: WebSocket, data: any) {
                 const task = data.payload;
                 const taskId = task.id || uuidv4();
 
+                // If task exists (by ID), update it. If not, insert.
                 await query(
                     `INSERT INTO tasks (id, session_id, title, status, assigned_to) 
                      VALUES ($1, $2, $3, $4, $5)
-                     ON CONFLICT (id) DO NOTHING`,
-                    [taskId, data.token, task.name, task.status || 'pending', task.assignedTo || null]
+                     ON CONFLICT (id) DO UPDATE 
+                     SET title = EXCLUDED.title, status = EXCLUDED.status, assigned_to = EXCLUDED.assigned_to`,
+                    [taskId, data.token, task.name, task.status || 'pending', task.assignee || null] // Fix: Use task.assignee
                 );
 
                 const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [data.token]);
                 broadcast(data.token, { type: 'tasks:update', payload: tasksRes.rows });
+                console.log(`[TASK CHORE] Created/Updated task "${task.name}" in ${data.token}`);
             } catch (err) {
                 console.error('Error creating task:', err);
             }
@@ -200,16 +205,20 @@ async function handleMessage(ws: WebSocket, data: any) {
         case 'task:assign':
             try {
                 const { taskName, assignee } = data.payload;
-                const taskId = uuidv4();
+
+                // Update existing task by name (or we should use ID ideally, but current client sends name/ID mixed)
+                // The client sends { taskName, assignee } in assignTask, but in handleAssignTask it sends taskId. 
+                // Let's support both or fix client. Client calls assignTask(task.name, member).
+                // Ideally we should use ID. But let's support name for now as per schema.
 
                 await query(
-                    `INSERT INTO tasks (id, session_id, title, status, assigned_to) 
-                     VALUES ($1, $2, $3, $4, $5)`,
-                    [taskId, data.token, taskName, 'pending', assignee]
+                    `UPDATE tasks SET assigned_to = $1, status = 'pending' WHERE session_id = $2 AND title = $3`,
+                    [assignee, data.token, taskName]
                 );
 
                 const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [data.token]);
                 broadcast(data.token, { type: 'tasks:update', payload: tasksRes.rows });
+                console.log(`[TASK ASSIGN] Assigned "${taskName}" to ${assignee} in ${data.token}`);
             } catch (err) {
                 console.error('Error assigning task:', err);
             }
@@ -233,11 +242,89 @@ async function handleMessage(ws: WebSocket, data: any) {
         case 'file:commit':
             // Optional: persist commit in memory or real DB
             break;
+
+        case 'file:focus':
         case 'file:saved':
-        case 'file:closed':
+            try {
+                const { filePath } = data.payload;
+                // Update member's current file
+                await query(
+                    `UPDATE members SET current_file = $1, status = 'online' WHERE id = $2 AND session_id = $3`,
+                    [filePath, data.member, data.token]
+                );
+
+                // Broadcast update
+                const membersRes = await query('SELECT * FROM members WHERE session_id = $1', [data.token]);
+                broadcast(data.token, { type: 'members:update', payload: membersRes.rows });
+
+                console.log(`[FILE ACTIVITY] ${data.member} focused/saved ${filePath}`);
+            } catch (err) {
+                console.error('Error handling file activity:', err);
+            }
             break;
+
+        case 'file:closed':
+            try {
+                // Clear current file
+                await query(
+                    `UPDATE members SET current_file = NULL, status = 'online' WHERE id = $1 AND session_id = $2`,
+                    [data.member, data.token]
+                );
+
+                const membersRes = await query('SELECT * FROM members WHERE session_id = $1', [data.token]);
+                broadcast(data.token, { type: 'members:update', payload: membersRes.rows });
+            } catch (err) {
+                console.error('Error handling file:closed:', err);
+            }
+            break;
+
+        case 'review:submit':
+            try {
+                const review = data.payload;
+                await query(
+                    `INSERT INTO reviews (id, session_id, author_id, file_path, content, ai_analysis, status) 
+                     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                    [review.id, data.token, review.authorId, review.filePath, review.content, JSON.stringify(review.aiAnalysis), 'pending']
+                );
+
+                // Fetch updated list
+                const reviewsRes = await query('SELECT * FROM reviews WHERE session_id = $1 ORDER BY created_at DESC', [data.token]);
+                broadcast(data.token, { type: 'reviews:update', payload: reviewsRes.rows });
+                console.log(`[REVIEW] Submitted: ${review.id}`);
+            } catch (err) {
+                console.error('Error submitting review:', err);
+            }
+            break;
+
+        case 'review:approve':
+            try {
+                const { reviewId } = data.payload;
+                await query(`UPDATE reviews SET status = 'approved' WHERE id = $1`, [reviewId]);
+
+                const reviewsRes = await query('SELECT * FROM reviews WHERE session_id = $1 ORDER BY created_at DESC', [data.token]);
+                broadcast(data.token, { type: 'reviews:update', payload: reviewsRes.rows });
+                console.log(`[REVIEW] Approved: ${reviewId}`);
+            } catch (err) {
+                console.error('Error approving review:', err);
+            }
+            break;
+
+        case 'review:decline':
+            try {
+                const { reviewId } = data.payload;
+                await query(`UPDATE reviews SET status = 'declined' WHERE id = $1`, [reviewId]);
+
+                const reviewsRes = await query('SELECT * FROM reviews WHERE session_id = $1 ORDER BY created_at DESC', [data.token]);
+                broadcast(data.token, { type: 'reviews:update', payload: reviewsRes.rows });
+                console.log(`[REVIEW] Declined: ${reviewId}`);
+            } catch (err) {
+                console.error('Error declining review:', err);
+            }
+            break;
+
         default:
             console.log('Unknown WS message type:', data.type);
+            break;
     }
 }
 

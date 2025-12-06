@@ -26,11 +26,18 @@ export function registerCommands(
                 return vscode.window.showWarningMessage('Project creation canceled.');
             }
 
-            const token = serverClient.generateInviteToken(projectName);
-            state.setProject({ name: projectName, token, inviteToken: token, tasks: [], members: [] });
+            // Get current user
+            const user = state.getUser();
+            if (!user || !user.name) {
+                return vscode.window.showWarningMessage('Please login with GitHub first');
+            }
+
+            const project = await serverClient.createProject(projectName, user.name);
+            state.setProject(project);
+            state.setRole('lead' as any);
 
             vscode.window.showInformationMessage(`Project "${projectName}" created. Invite token generated.`);
-            log(`Project "${projectName}" created with token: ${token}`);
+            log(`Project "${projectName}" created with token: ${project.token}`);
 
             viewsManager.refreshFlowMap();
             viewsManager.refreshDutyQueue();
@@ -48,7 +55,13 @@ export function registerCommands(
             const token = await vscode.window.showInputBox({ prompt: 'Enter Manta invite token' });
             if (!token) return;
 
-            const sessionData = await serverClient.joinSession(token);
+            // Get current user
+            const user = state.getUser();
+            if (!user || !user.name) {
+                return vscode.window.showWarningMessage('Please login with GitHub first');
+            }
+
+            const sessionData = await serverClient.joinSession(token, user.name);
             state.setProject(sessionData.project);
             state.setRole(sessionData.role as import('../../shared/ts-types').UserRole);
 
@@ -227,9 +240,22 @@ export function registerCommands(
 
                 progress.report({ increment: 60, message: "Generating inline comments..." });
 
-                // Generate inline comments for each file
+                // Apply inline comments back to editor
                 for (const file of modifiedFiles) {
                     file.proposedCode = await aiClient.generateInlineComments(file.proposedCode, file.language);
+
+                    // Find document and apply edit
+                    const doc = textDocuments.find(d => d.uri.fsPath.endsWith(file.path));
+                    if (doc) {
+                        const edit = new vscode.WorkspaceEdit();
+                        const fullRange = new vscode.Range(
+                            doc.positionAt(0),
+                            doc.positionAt(doc.getText().length)
+                        );
+                        edit.replace(doc.uri, fullRange, file.proposedCode);
+                        await vscode.workspace.applyEdit(edit);
+                        await doc.save();
+                    }
                 }
 
                 progress.report({ increment: 80, message: "Submitting for review..." });
@@ -247,14 +273,19 @@ export function registerCommands(
                     submittedAt: new Date()
                 };
 
-                // Send to server
-                await serverClient.submitCodeReview(review);
-
-                progress.report({ increment: 100, message: "Complete!" });
-
-                vscode.window.showInformationMessage(
-                    `✅ Code review submitted! Quality: ${combinedAnalysis.qualityScore}%, Performance: ${combinedAnalysis.performanceScore}%`
-                );
+                // Send to server (if available)
+                try {
+                    await serverClient.submitCodeReview(review);
+                    progress.report({ increment: 100, message: "Submitted!" });
+                    vscode.window.showInformationMessage(
+                        `✅ Code review submitted! Quality: ${combinedAnalysis.qualityScore}%, Performance: ${combinedAnalysis.performanceScore}%`
+                    );
+                } catch (e) {
+                    progress.report({ increment: 100, message: "Done (Local only)" });
+                    vscode.window.showInformationMessage(
+                        `✅ AI Review applied locally! Quality: ${combinedAnalysis.qualityScore}%, Performance: ${combinedAnalysis.performanceScore}% (Server offline)`
+                    );
+                }
             });
 
         } catch (err) {

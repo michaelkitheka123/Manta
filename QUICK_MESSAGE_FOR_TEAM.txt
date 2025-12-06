@@ -1,0 +1,25 @@
+# Quick Setup - Copy & Send to Your Team
+
+Hey! Here's how to install Manta and join our project:
+
+## 1. Download
+https://github.com/michaelkitheka123/Manta/releases/latest
+Download: `manta-1.0.0.vsix`
+
+## 2. Install
+- Open VS Code
+- Press `Ctrl+Shift+X`
+- Click `⋯` → "Install from VSIX..."
+- Select the downloaded file
+- Click "Reload"
+
+## 3. Join
+- Click Manta icon (left sidebar)
+- Click "Login with GitHub"
+- Authorize in browser
+- Click "Join Existing Session"
+- Paste this invite token: **[YOUR_TOKEN_HERE]**
+
+Done! 🚀
+
+Questions? Ping me!

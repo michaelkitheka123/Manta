@@ -26,7 +26,7 @@
         "Other"
     ],
     "activationEvents": [
-        "*"
+        "onStartupFinished"
     ],
     "main": "./out/extension.js",
     "contributes": {
@@ -70,13 +70,15 @@
                 {
                     "type": "webview",
                     "id": "manta.sidebarPanel",
-                    "name": "Control Panel"
+                    "name": "Control Panel",
+                    "icon": "resources/mantaray.svg"
                 }
             ],
             "explorer": [
                 {
                     "id": "mantaDutyQueue",
-                    "name": "Duty Queue"
+                    "name": "Duty Queue",
+                    "icon": "resources/mantaray.svg"
                 }
             ]
         },
@@ -86,24 +88,31 @@
             "properties": {
                 "manta.serverUrl": {
                     "type": "string",
-                    "default": "ws://localhost:3000",
-                    "description": "WebSocket URL of the Manta backend server."
+                    "default": "wss://web-production-9466f.up.railway.app",
+                    "description": "WebSocket URL of the Manta backend server. Pre-configured for production."
                 },
                 "manta.aiServerUrl": {
                     "type": "string",
-                    "default": "http://localhost:8000",
-                    "description": "HTTP URL of the Manta AI service."
+                    "default": "https://manta-ai-production.up.railway.app",
+                    "description": "HTTP URL of the Manta AI service. Pre-configured for production."
+                },
+                "manta.googleStudioToken": {
+                    "type": "string",
+                    "default": "AIzaSyAE2ZtJVU4pl57A3dHc8UXOca-IvxPq-oE",
+                    "description": "Google Studio AI Token for direct Gemini API integration (Serverless Mode)."
                 }
             }
         }
     },
     "scripts": {
-        "vscode:prepublish": "npm run compile",
+        "vscode:prepublish": "node esbuild.js --production",
         "compile": "node esbuild.js",
         "watch": "node esbuild.js --watch"
     },
     "devDependencies": {
         "@types/node": "^20.19.25",
+        "@types/react": "^18.2.0",
+        "@types/react-dom": "^18.2.0",
         "@types/vscode": "^1.80.0",
         "@types/ws": "^8.18.1",
         "esbuild": "^0.19.0",

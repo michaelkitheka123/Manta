@@ -1,0 +1,4 @@
+{
+    "manta.serverUrl": "wss://your-production-server.railway.app",
+    "manta.aiServerUrl": "https://your-ai-service.railway.app"
+}

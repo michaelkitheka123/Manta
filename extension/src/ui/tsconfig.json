@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "module": "esnext",
+        "target": "es2020",
+        "lib": [
+            "dom",
+            "es2020"
+        ],
+        "jsx": "react",
+        "moduleResolution": "node",
+        "rootDir": ".",
+        "strict": true,
+        "forceConsistentCasingInFileNames": true
+    },
+    "include": [
+        "**/*"
+    ]
+}

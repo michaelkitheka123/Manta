@@ -15,24 +15,26 @@ export class AIClient {
     constructor(state: ExtensionState) {
         this.state = state;
         this.baseUrl = vscode.workspace.getConfiguration('manta').get('aiServerUrl', 'http://localhost:8000');
-        log(`AIClient initialized with baseUrl=${this.baseUrl}`);
+        this.googleKey = vscode.workspace.getConfiguration('manta').get('googleStudioToken');
+        log(`AIClient initialized with baseUrl=${this.baseUrl}, googleKey=${this.googleKey ? 'PRESENT' : 'MISSING'}`);
     }
+
+    private googleKey: string | undefined;
 
     // -----------------------------
     // Connect to the AI service
     // -----------------------------
     async connect(): Promise<void> {
         try {
-            // Optional: Test connection
-            const res = await axios.get(`${this.baseUrl}/health`);
-            if (res.status === 200) {
-                log('Connected to AI service successfully.');
-            }
+            // Skip AI connection - no AI server deployed yet
+            log('AI service connection skipped (no AI server deployed)');
 
-            // Start background polling for suggestions or risk updates
-            this.pollingTimer = setInterval(() => this.fetchBackgroundSuggestions(), this.pollingInterval);
+            // Note: AI features (code analysis, suggestions) will not be available
+            // until an AI server is deployed and configured
+
+            // Don't start polling if there's no server
+            // this.pollingTimer = setInterval(() => this.fetchBackgroundSuggestions(), this.pollingInterval);
         } catch (err) {
-            vscode.window.showErrorMessage(`Failed to connect to AI service: ${err}`);
             log(`Error: ${err}`);
         }
     }
@@ -68,6 +70,31 @@ export class AIClient {
     // Request AI code review
     // -----------------------------
     async reviewCode(filePath: string, content: string, reviewType: 'logic' | 'style') {
+        // Direct Google AI Path
+        if (this.googleKey) {
+            try {
+                const prompt = `Review this code for ${reviewType}. Provide suggestions as a JSON array of objects with properties: "line" (number), "description" (string), "severity" (string: 'info'|'warning'|'error'). Code:\n\n${content}`;
+                const response = await axios.post(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${this.googleKey}`,
+                    { contents: [{ parts: [{ text: prompt }] }] }
+                );
+
+                const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+                // Try to extract JSON from markdown block
+                const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```\n([\s\S]*?)\n```/) || [null, text];
+                const cleanJson = jsonMatch[1] || text;
+
+                const suggestions: AISuggestion[] = JSON.parse(cleanJson);
+                if (suggestions.length > 0) {
+                    this.state.applyAISuggestions(suggestions);
+                }
+                return { suggestions };
+            } catch (err) {
+                log(`Google AI review failed: ${err}`);
+                return { suggestions: [] };
+            }
+        }
+
         try {
             const res = await axios.post(`${this.baseUrl}/review/code`, {
                 filePath,
@@ -151,6 +178,36 @@ export class AIClient {
     // AI-Powered Code Analysis
     // -----------------------------
     async analyzeCode(code: string, language: string, filePath: string): Promise<import('../../shared/ts-types').AIAnalysis> {
+        // Direct Google AI Path
+        if (this.googleKey) {
+            try {
+                const prompt = `Analyze this ${language} code. Return a JSON object with: "summary" (string), "qualityScore" (0-100), "performanceScore" (0-100), "bottlenecks" (string array), "improvements" (string array). Code:\n\n${code}`;
+                const response = await axios.post(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${this.googleKey}`,
+                    { contents: [{ parts: [{ text: prompt }] }] }
+                );
+
+                const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!text) throw new Error('No response from Google AI');
+
+                const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/```\n([\s\S]*?)\n```/) || [null, text];
+                const cleanJson = jsonMatch[1] || text;
+                const analysis: import('../../shared/ts-types').AIAnalysis = JSON.parse(cleanJson);
+
+                // Ensure defaults
+                analysis.inlineComments = analysis.inlineComments || [];
+
+                log(`Google AI Code analysis completed for ${filePath}`);
+                return analysis;
+            } catch (err) {
+                log(`Google AI Code analysis failed: ${err}`);
+                return {
+                    bottlenecks: [], improvements: [], inlineComments: [],
+                    summary: 'Direct AI Analysis failed', performanceScore: 0, qualityScore: 0
+                };
+            }
+        }
+
         try {
             const res = await axios.post(`${this.baseUrl}/analyze/code`, {
                 code,
@@ -184,6 +241,31 @@ export class AIClient {
     }
 
     async generateInlineComments(code: string, language: string): Promise<string> {
+        // Direct Google AI Path
+        if (this.googleKey) {
+            try {
+                // Modified prompt to ensure comments are added
+                const prompt = `Review this ${language} code. Add detailed inline comments explaining the logic and adding suggestions for best practices. Return the FULL code with comments integrated. Do NOT output markdown code blocks, just the code. Code:\n\n${code}`;
+                const response = await axios.post(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${this.googleKey}`,
+                    { contents: [{ parts: [{ text: prompt }] }] }
+                );
+
+                let text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!text) return code;
+
+                // Strip markdown if present
+                const jsonMatch = text.match(/```[\w]*\n([\s\S]*?)\n```/);
+                if (jsonMatch) text = jsonMatch[1];
+
+                log(`Google AI Generated inline comments for ${language} code`);
+                return text;
+            } catch (err) {
+                log(`Google AI Failed to generate inline comments: ${err}`);
+                return code;
+            }
+        }
+
         try {
             const res = await axios.post(`${this.baseUrl}/generate/comments`, {
                 code,

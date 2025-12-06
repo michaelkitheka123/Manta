@@ -41,6 +41,14 @@ export class ExtensionState {
     // Code reviews pending approval
     private pendingReviews: import('../../shared/ts-types').CodeReview[] = [];
 
+    // Store all projects user has joined/created
+    private allProjects: Array<{
+        userId?: string; // Optional for backward compatibility
+        project: Project;
+        role: UserRole;
+        lastAccessed: Date;
+    }> = [];
+
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
         // Restore user from global state
@@ -67,8 +75,17 @@ export class ExtensionState {
 
     async logout() {
         this.user = null;
+        this.project = null;
+        this.role = null;
+        this.tasks = [];
+        this.availableTasks = [];
+        this.pendingReviews = [];
+        this.aiSuggestions = [];
+        this.activeMembers = [];
+        this.dependencyGraph = null;
+        // Don't clear allProjects, just hide them via getter
         await this.context.globalState.update('manta_user', undefined);
-        log('User logged out.');
+        log('User logged out and session cleared completely.');
     }
 
     // -----------------------------
@@ -105,6 +122,10 @@ export class ExtensionState {
 
     getTasks(): Task[] {
         return this.tasks;
+    }
+
+    hasTask(taskId: string): boolean {
+        return this.tasks.some(t => t.id === taskId);
     }
 
     getPendingApprovals(): Task[] {
@@ -149,6 +170,14 @@ export class ExtensionState {
         this.activeMembers = members;
     }
 
+    // Update members list from server (Websocket event)
+    updateMembers(members: import('../../shared/ts-types').Member[]) {
+        if (this.project) {
+            this.project.members = members;
+            log(`Updated ${members.length} members for project ${this.project.name}`);
+        }
+    }
+
     // -----------------------------
     // Dependency Graph
     // -----------------------------
@@ -178,7 +207,6 @@ export class ExtensionState {
     applyAISuggestions(suggestions: AISuggestion[]) {
         this.aiSuggestions.push(...suggestions);
         log(`Applied ${suggestions.length} AI suggestions.`);
-        // Optionally trigger editor decorations or notifications here
     }
 
     getAISuggestions(): AISuggestion[] {
@@ -224,6 +252,129 @@ export class ExtensionState {
         await this.context.globalState.update('manta_pending_project', undefined);
         await this.context.globalState.update('manta_pending_role', undefined);
         log('Cleared pending project state.');
+    }
+
+    // -----------------------------
+    // Project List Management
+    // -----------------------------
+
+    // Save current project to persistent storage
+    async saveCurrentProject() {
+        if (!this.project || !this.role) return;
+
+        // We only tag with user ID if a user is logged in
+        // If not logged in, we shouldn't really be saving, but for safety we check
+        const currentUserId = this.user ? this.user.id : undefined;
+
+        // Try to find existing entry
+        const existingIndex = this.allProjects.findIndex(
+            p => p.project.token === this.project!.token
+        );
+
+        const projectData = {
+            userId: currentUserId, // Tag with user
+            project: this.project,
+            role: this.role,
+            lastAccessed: new Date()
+        };
+
+        if (existingIndex >= 0) {
+            // Update existing
+            // Note: This "claims" the project for the current user if it was previously undefined
+            this.allProjects[existingIndex] = projectData;
+        } else {
+            // Add new
+            this.allProjects.push(projectData);
+        }
+
+        // Save to globalState
+        await this.context.globalState.update('manta_all_projects', this.allProjects);
+        await this.context.globalState.update('manta_current_project_token', this.project.token);
+
+        log(`Saved project: ${this.project.name} (User: ${currentUserId || 'Public'})`);
+    }
+
+    // Load all projects from storage
+    loadAllProjects() {
+        const saved = this.context.globalState.get<Array<{
+            userId?: string;
+            project: Project;
+            role: UserRole;
+            lastAccessed: Date;
+        }>>('manta_all_projects');
+
+        if (saved) {
+            this.allProjects = saved;
+            log(`Loaded ${saved.length} projects from storage`);
+        }
+    }
+
+    // Get all saved projects (sorted by last accessed)
+    getAllProjects() {
+        const currentUserId = this.user ? this.user.id : undefined;
+
+        return this.allProjects
+            .filter(p => {
+                // Show if it belongs to current user OR if it has no owner (legacy/public)
+                return p.userId === currentUserId || p.userId === undefined;
+            })
+            .sort((a, b) => new Date(b.lastAccessed).getTime() - new Date(a.lastAccessed).getTime());
+    }
+
+    // Switch to a different project
+    async switchToProject(projectToken: string) {
+        // Look in allProjects (filter is applied in UI, but here we can be more permissive or strict)
+        // Let's rely on finding it in the array
+        const projectData = this.allProjects.find(p => p.project.token === projectToken);
+
+        if (projectData) {
+            // Optional security check: if we want to enforce ownership STRICTLY here:
+            if (projectData.userId && this.user && projectData.userId !== this.user.id) {
+                log(`Access denied: Project ${projectToken} belongs to another user.`);
+                return false;
+            }
+
+            this.project = projectData.project;
+            this.role = projectData.role;
+            projectData.lastAccessed = new Date(); // Update access time
+            await this.saveCurrentProject(); // Will save with current User ID (claiming it if it was undefined)
+            log(`Switched to project: ${projectData.project.name}`);
+            return true;
+        }
+        return false;
+    }
+
+    // Leave current project (but keep in history)
+    async leaveCurrentProject() {
+        this.project = null;
+        this.role = null;
+        await this.context.globalState.update('manta_current_project_token', undefined);
+        log('Left current project');
+    }
+
+    // Remove project from history
+    async removeProject(projectToken: string) {
+        // Remove from list
+        this.allProjects = this.allProjects.filter(p => p.project.token !== projectToken);
+        await this.context.globalState.update('manta_all_projects', this.allProjects);
+        log(`Removed project: ${projectToken}`);
+    }
+
+    // Restore last active project on startup
+    async restoreLastProject() {
+        const currentProjectToken = this.context.globalState.get<string>('manta_current_project_token');
+        if (currentProjectToken) {
+            // Attempt switch
+            const restored = await this.switchToProject(currentProjectToken);
+            if (restored) {
+                log(`Restored last active project: ${currentProjectToken}`);
+                return true;
+            } else {
+                // If restore failed (e.g. user mismatch), clear the token
+                await this.context.globalState.update('manta_current_project_token', undefined);
+            }
+        }
+        return false;
     }
 
     // -----------------------------
@@ -322,6 +473,10 @@ export class ExtensionState {
     addPendingReview(review: import('../../shared/ts-types').CodeReview) {
         this.pendingReviews.push(review);
         log(`Code review added: ${review.id}`);
+    }
+
+    addReview(review: import('../../shared/ts-types').CodeReview) {
+        this.addPendingReview(review);
     }
 
     getPendingReviews(): import('../../shared/ts-types').CodeReview[] {

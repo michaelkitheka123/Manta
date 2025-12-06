@@ -36,6 +36,15 @@ export async function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(`Welcome back to ${pending.project.name}! Manta is ready.`);
         }
 
+        // Load all saved projects
+        state.loadAllProjects();
+
+        // Try to restore last active project
+        const restored = await state.restoreLastProject();
+        if (restored) {
+            log('Restored last active project');
+        }
+
         // 2. Initialize Clients (but don't connect yet)
         const clientsStart = Date.now();
         log('⏱️  [2/7] Initializing Clients...');
@@ -77,10 +86,6 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
         log(`✅ Sidebar registered in ${Date.now() - sidebarStart}ms`);
-
-        // Store provider in state or global var to access it later
-        // For simplicity in this scope, we'll pass it to setupEventListeners
-        setupEventListeners(sidebarProvider);
 
         // 4. Initialize Views Manager
         const viewsStart = Date.now();
@@ -134,13 +139,30 @@ function setupEventListeners(sidebarProvider: SidebarProvider) {
 
     vscode.window.onDidChangeActiveTextEditor((editor) => {
         if (editor) {
+            const relativePath = vscode.workspace.asRelativePath(editor.document.uri);
             state.setCurrentEditor(editor.document.uri.fsPath);
+            serverClient.notifyFileFocus(relativePath);
         }
     });
 
     // Activate background listeners
-    serverClient.onTaskUpdate((tasks) => state.setTasks(tasks));
-    serverClient.onDependencyUpdate((graph) => state.setDependencyGraph(graph));
+    serverClient.onTaskUpdate((tasks) => {
+        state.setTasks(tasks);
+        sidebarProvider.refresh();
+    });
+
+    serverClient.onDependencyUpdate((graph) => {
+        state.setDependencyGraph(graph);
+        sidebarProvider.refresh();
+    });
+
+    serverClient.onMembersUpdate((members) => {
+        // Map any incompatible types if necessary, though shared/ts-types should align
+        // The server sends Member objects which match our interface (mostly)
+        state.updateMembers(members);
+        sidebarProvider.refresh();
+    });
+
     aiClient.onSuggestions((suggestions) => state.applyAISuggestions(suggestions));
 
     // Watch for new files to auto-generate tasks

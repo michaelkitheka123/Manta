@@ -36,6 +36,7 @@ export interface Member {
 }
 
 export interface Project {
+    id?: string; // Added for compatibility
     name: string;
     token: string;
     inviteToken?: string;
@@ -95,11 +96,16 @@ export interface ReviewFile {
 
 export interface CodeReview {
     id: string;
+    projectId?: string; // Added
     submittedBy: string;
+    authorId?: string; // Added alias
     submittedByName: string;
+    authorName?: string; // Added alias
     taskId?: string;
     taskName?: string;
     files: ReviewFile[];
+    filePath?: string; // Added alias
+    content?: string; // Added alias
     aiAnalysis: AIAnalysis;
     status: 'pending' | 'approved' | 'declined' | 'changes_requested';
     submittedAt: Date;

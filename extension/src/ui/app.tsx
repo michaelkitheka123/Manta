@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import ReactDOM from 'react-dom';
+import * as ReactDOM from 'react-dom';
 import './styles.css';
 
 interface Task {
