@@ -98,8 +98,8 @@ async function handleMessage(ws: WebSocket, data: any) {
                         project: {
                             name: projectName,
                             token: token,
-                            members: membersRes.rows,
-                            tasks: tasksRes.rows
+                            members: membersRes.rows.map(dbToMember),
+                            tasks: tasksRes.rows.map(dbToTask)
                         },
                         role: 'lead'
                     }
@@ -171,7 +171,7 @@ async function handleMessage(ws: WebSocket, data: any) {
 
                 // Broadcast update
                 console.log(`[MEMBERS BROADCAST] Broadcasting to session ${token}:`, JSON.stringify(membersRes.rows));
-                broadcast(token, { type: 'members:update', payload: membersRes.rows });
+                broadcast(token, { type: 'members:update', payload: membersRes.rows.map(dbToMember) });
 
                 // Send initial state to joiner
                 ws.send(JSON.stringify({
@@ -180,9 +180,9 @@ async function handleMessage(ws: WebSocket, data: any) {
                         project: {
                             name: sessionRes.rows[0].name || `Project ${token.substring(0, 6)}`, // Use DB name or fallback
                             token: token,
-                            members: membersRes.rows,
-                            tasks: tasksRes.rows,
-                            reviews: reviewsRes.rows
+                            members: membersRes.rows.map(dbToMember),
+                            tasks: tasksRes.rows.map(dbToTask),
+                            reviews: reviewsRes.rows.map(dbToReview)
                         },
                         role: memberRole // Use actual role from database
                     }
@@ -221,7 +221,7 @@ async function handleMessage(ws: WebSocket, data: any) {
                 );
 
                 const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [data.token]);
-                broadcast(data.token, { type: 'tasks:update', payload: tasksRes.rows });
+                broadcast(data.token, { type: 'tasks:update', payload: tasksRes.rows.map(dbToTask) });
                 console.log(`[TASK CHORE] Created/Updated task "${task.name}" in ${data.token}`);
             } catch (err) {
                 console.error('Error creating task:', err);
@@ -237,13 +237,14 @@ async function handleMessage(ws: WebSocket, data: any) {
                 // Let's support both or fix client. Client calls assignTask(task.name, member).
                 // Ideally we should use ID. But let's support name for now as per schema.
 
+                const memberId = `${data.token}_${assignee}`; // Construct ID to match FK
                 await query(
                     `UPDATE tasks SET assigned_to = $1, status = 'pending' WHERE session_id = $2 AND title = $3`,
-                    [assignee, data.token, taskName]
+                    [memberId, data.token, taskName]
                 );
 
                 const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [data.token]);
-                broadcast(data.token, { type: 'tasks:update', payload: tasksRes.rows });
+                broadcast(data.token, { type: 'tasks:update', payload: tasksRes.rows.map(dbToTask) });
                 console.log(`[TASK ASSIGN] Assigned "${taskName}" to ${assignee} in ${data.token}`);
             } catch (err) {
                 console.error('Error assigning task:', err);
@@ -259,7 +260,7 @@ async function handleMessage(ws: WebSocket, data: any) {
                 );
 
                 const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [data.token]);
-                broadcast(data.token, { type: 'tasks:update', payload: tasksRes.rows });
+                broadcast(data.token, { type: 'tasks:update', payload: tasksRes.rows.map(dbToTask) });
             } catch (err) {
                 console.error('Error approving task:', err);
             }
@@ -281,7 +282,7 @@ async function handleMessage(ws: WebSocket, data: any) {
 
                 // Broadcast update
                 const membersRes = await query('SELECT * FROM members WHERE session_id = $1', [data.token]);
-                broadcast(data.token, { type: 'members:update', payload: membersRes.rows });
+                broadcast(data.token, { type: 'members:update', payload: membersRes.rows.map(dbToMember) });
 
                 console.log(`[FILE ACTIVITY] ${data.member} focused/saved ${filePath}`);
             } catch (err) {
@@ -298,7 +299,7 @@ async function handleMessage(ws: WebSocket, data: any) {
                 );
 
                 const membersRes = await query('SELECT * FROM members WHERE session_id = $1', [data.token]);
-                broadcast(data.token, { type: 'members:update', payload: membersRes.rows });
+                broadcast(data.token, { type: 'members:update', payload: membersRes.rows.map(dbToMember) });
             } catch (err) {
                 console.error('Error handling file:closed:', err);
             }
@@ -315,7 +316,7 @@ async function handleMessage(ws: WebSocket, data: any) {
 
                 // Fetch updated list
                 const reviewsRes = await query('SELECT * FROM reviews WHERE session_id = $1 ORDER BY created_at DESC', [data.token]);
-                broadcast(data.token, { type: 'reviews:update', payload: reviewsRes.rows });
+                broadcast(data.token, { type: 'reviews:update', payload: reviewsRes.rows.map(dbToReview) });
                 console.log(`[REVIEW] Submitted: ${review.id}`);
             } catch (err) {
                 console.error('Error submitting review:', err);
@@ -328,7 +329,7 @@ async function handleMessage(ws: WebSocket, data: any) {
                 await query(`UPDATE reviews SET status = 'approved' WHERE id = $1`, [reviewId]);
 
                 const reviewsRes = await query('SELECT * FROM reviews WHERE session_id = $1 ORDER BY created_at DESC', [data.token]);
-                broadcast(data.token, { type: 'reviews:update', payload: reviewsRes.rows });
+                broadcast(data.token, { type: 'reviews:update', payload: reviewsRes.rows.map(dbToReview) });
                 console.log(`[REVIEW] Approved: ${reviewId}`);
             } catch (err) {
                 console.error('Error approving review:', err);
@@ -341,7 +342,7 @@ async function handleMessage(ws: WebSocket, data: any) {
                 await query(`UPDATE reviews SET status = 'declined' WHERE id = $1`, [reviewId]);
 
                 const reviewsRes = await query('SELECT * FROM reviews WHERE session_id = $1 ORDER BY created_at DESC', [data.token]);
-                broadcast(data.token, { type: 'reviews:update', payload: reviewsRes.rows });
+                broadcast(data.token, { type: 'reviews:update', payload: reviewsRes.rows.map(dbToReview) });
                 console.log(`[REVIEW] Declined: ${reviewId}`);
             } catch (err) {
                 console.error('Error declining review:', err);
@@ -394,4 +395,49 @@ function replayQueuedMessages(ws: WebSocket, token: string, member: string) {
         messageQueues.delete(queueKey);
         console.log(`[QUEUE REPLAY] Cleared queue for ${member}`);
     }
+}
+
+// -----------------------------
+// Data Mapping Helpers (Snake -> Camel)
+// -----------------------------
+function dbToTask(row: any): any {
+    return {
+        id: row.id,
+        name: row.title,
+        status: row.status,
+        assignee: row.assigned_to ? row.assigned_to.split('_').slice(1).join('_') : undefined, // Strip prefix
+        description: '' // DB doesn't have description yet
+    };
+}
+
+function dbToMember(row: any): any {
+    return {
+        id: row.id,
+        name: row.name,
+        role: row.role,
+        isOnline: row.status === 'online',
+        currentFile: row.current_file,
+        metrics: {
+            commitsAccepted: row.commits_accepted || 0,
+            tasksCompleted: row.tasks_completed || 0,
+            linesOfCode: row.lines_of_code || 0
+            // others...
+        }
+    };
+}
+
+function dbToReview(row: any): any {
+    return {
+        id: row.id,
+        projectId: row.session_id,
+        submittedBy: row.author_id, // assuming author_id stores name/id
+        authorId: row.author_id,
+        submittedByName: row.author_id, // fallback
+        authorName: row.author_id, // fallback
+        filePath: row.file_path,
+        content: row.content,
+        aiAnalysis: row.ai_analysis,
+        status: row.status,
+        submittedAt: row.created_at
+    };
 }

@@ -14,7 +14,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         private state: ExtensionState,
         private serverClient: ServerClient,
         private aiClient: AIClient
-    ) { }
+    ) {
+        // Auto-refresh when state changes (socket updates, etc)
+        this.state.onDidChangeState(() => {
+            this.refresh();
+        });
+    }
 
     public resolveWebviewView(webviewView: vscode.WebviewView): void {
         const resolveStart = Date.now();
@@ -103,6 +108,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'requestTaskAssignment':
                     await this.handleRequestTaskAssignment(data.taskId);
+                    break;
+                case 'assignTask':
+                    await this.handleAssignTask(data.taskId, data.member);
                     break;
                 case 'login':
                     await this.handleLogin();
@@ -214,7 +222,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             task.assignee = member;
             this.state.updateTask(task);
 
-            await this.serverClient.assignTask(task.name, member);
+            // Sync with server using createTask (UPSERT) to ensure it exists
+            await this.serverClient.createTask(task);
 
             vscode.window.showInformationMessage(`Task "${task.name}" assigned to ${member}`);
             this.refresh();
@@ -237,8 +246,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 task.assignee = user.name;
                 this.state.updateTask(task);
 
-                // Sync with server
-                await this.serverClient.assignTask(task.name, user.name);
+                // Sync with server using createTask (UPSERT)
+                await this.serverClient.createTask(task);
 
                 vscode.window.showInformationMessage(`You picked up task: ${task.name}`);
 
@@ -419,12 +428,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             // Find task by ID and assign
             const task = this.state.findTaskById(taskId);
             if (task) {
-                // In a real scenario, this would call the server
                 task.assignee = selectedMember;
                 this.state.updateTask(task);
 
-                // Also call server (mocked/wrapped)
-                // await this.serverClient.assignTask(task.name, selectedMember);
+                // Call server to sync assignment
+                await this.serverClient.assignTask(task.name, selectedMember);
 
                 vscode.window.showInformationMessage(`Assigned '${task.name}' to ${selectedMember}`);
                 this.refresh();

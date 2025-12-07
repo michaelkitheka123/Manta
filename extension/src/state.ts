@@ -49,6 +49,9 @@ export class ExtensionState {
         lastAccessed: Date;
     }> = [];
 
+    private _onDidChangeState: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
+    public readonly onDidChangeState: vscode.Event<void> = this._onDidChangeState.event;
+
     constructor(context: vscode.ExtensionContext) {
         this.context = context;
         // Restore user from global state
@@ -60,6 +63,10 @@ export class ExtensionState {
         log('ExtensionState initialized.');
     }
 
+    private notifyStateChange() {
+        this._onDidChangeState.fire();
+    }
+
     // -----------------------------
     // User Management
     // -----------------------------
@@ -67,6 +74,7 @@ export class ExtensionState {
         this.user = user;
         await this.context.globalState.update('manta_user', user);
         log(`User authenticated: ${user.name}`);
+        this.notifyStateChange();
     }
 
     getUser(): User | null {
@@ -86,6 +94,7 @@ export class ExtensionState {
         // Don't clear allProjects, just hide them via getter
         await this.context.globalState.update('manta_user', undefined);
         log('User logged out and session cleared completely.');
+        this.notifyStateChange();
     }
 
     // -----------------------------
@@ -94,6 +103,7 @@ export class ExtensionState {
     setProject(project: Project) {
         this.project = project;
         log(`Project set: ${project.name}`);
+        this.notifyStateChange();
     }
 
     getProject(): Project | null {
@@ -106,6 +116,7 @@ export class ExtensionState {
     setRole(role: UserRole) {
         this.role = role;
         log(`Role set: ${role}`);
+        this.notifyStateChange();
     }
 
     getRole(): UserRole | null {
@@ -118,6 +129,7 @@ export class ExtensionState {
     setTasks(tasks: Task[]) {
         this.tasks = tasks;
         log(`Tasks updated: ${tasks.length} tasks`);
+        this.notifyStateChange();
     }
 
     getTasks(): Task[] {
@@ -135,6 +147,7 @@ export class ExtensionState {
     addTask(task: Task) {
         this.tasks.push(task);
         log(`Task added: ${task.name}`);
+        this.notifyStateChange();
     }
 
     updateTask(task: Task) {
@@ -142,6 +155,7 @@ export class ExtensionState {
         if (index !== -1) {
             this.tasks[index] = task;
             log(`Task updated: ${task.name}`);
+            this.notifyStateChange();
         }
     }
 
@@ -175,6 +189,7 @@ export class ExtensionState {
         if (this.project) {
             this.project.members = members;
             log(`Updated ${members.length} members for project ${this.project.name}`);
+            this.notifyStateChange();
         }
     }
 
@@ -465,6 +480,7 @@ export class ExtensionState {
     addPendingReview(review: import('../../shared/ts-types').CodeReview) {
         this.pendingReviews.push(review);
         log(`Code review added: ${review.id}`);
+        this.notifyStateChange();
     }
 
     addReview(review: import('../../shared/ts-types').CodeReview) {
@@ -481,6 +497,7 @@ export class ExtensionState {
             review.status = status;
             review.reviewedAt = new Date();
             log(`Review ${reviewId} status updated to ${status}`);
+            this.notifyStateChange();
         }
     }
 
