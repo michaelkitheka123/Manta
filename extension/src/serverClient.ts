@@ -77,8 +77,8 @@ export class ServerClient {
                     break;
 
                 case 'members:update':
-                    const members: string[] = data.payload;
-                    this.state.setActiveMembers(members);
+                    log(`Received members update: ${JSON.stringify(data.payload)}`);
+                    this.state.updateMembers(data.payload);
                     break;
 
                 case 'notification':
@@ -123,7 +123,7 @@ export class ServerClient {
     async assignTask(taskName: string, member: string): Promise<void> {
         this.send({
             type: 'task:assign',
-            payload: { taskName, member },
+            payload: { taskName, assignee: member },
         });
     }
 
@@ -182,6 +182,7 @@ export class ServerClient {
                         clearTimeout(timeout);
                         this.ws?.off('message', listener);
                         log(`Successfully joined session: ${JSON.stringify(message.payload)}`);
+                        log(`Members in project: ${JSON.stringify(message.payload.project?.members || [])}`);
                         resolve(message.payload);
                     }
 
@@ -242,6 +243,7 @@ export class ServerClient {
                         clearTimeout(timeout);
                         this.ws?.off('message', listener);
                         log(`Successfully created project: ${projectName}`);
+                        log(`Members in created project: ${JSON.stringify(message.payload.project?.members || [])}`);
                         resolve(message.payload.project);
                     }
                 } catch (err) {

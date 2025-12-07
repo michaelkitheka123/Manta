@@ -163,6 +163,20 @@ function setupEventListeners(sidebarProvider: SidebarProvider) {
         sidebarProvider.refresh();
     });
 
+    serverClient.onCodeReviewUpdate((reviews) => {
+        log(`[REVIEWS UPDATE] Received ${reviews.length} reviews from server`);
+        // Update state with new reviews
+        reviews.forEach(review => {
+            // Check if review already exists in state
+            const existingReviews = state.getPendingReviews();
+            const exists = existingReviews.some(r => r.id === review.id);
+            if (!exists) {
+                state.addReview(review);
+            }
+        });
+        sidebarProvider.refresh();
+    });
+
     aiClient.onSuggestions((suggestions) => state.applyAISuggestions(suggestions));
 
     // Watch for new files to auto-generate tasks

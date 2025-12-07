@@ -258,13 +258,12 @@ export class ExtensionState {
     // Project List Management
     // -----------------------------
 
-    // Save current project to persistent storage
+    // Save current project to persistent storage (device-specific, no user filtering)
     async saveCurrentProject() {
-        if (!this.project || !this.role) return;
-
-        // We only tag with user ID if a user is logged in
-        // If not logged in, we shouldn't really be saving, but for safety we check
-        const currentUserId = this.user ? this.user.id : undefined;
+        if (!this.project || !this.role) {
+            log('[SAVE] Cannot save: no project or role set');
+            return;
+        }
 
         // Try to find existing entry
         const existingIndex = this.allProjects.findIndex(
@@ -272,7 +271,6 @@ export class ExtensionState {
         );
 
         const projectData = {
-            userId: currentUserId, // Tag with user
             project: this.project,
             role: this.role,
             lastAccessed: new Date()
@@ -280,24 +278,26 @@ export class ExtensionState {
 
         if (existingIndex >= 0) {
             // Update existing
-            // Note: This "claims" the project for the current user if it was previously undefined
             this.allProjects[existingIndex] = projectData;
+            log(`[SAVE] Updated existing project: ${this.project.name} (token: ${this.project.token})`);
         } else {
             // Add new
             this.allProjects.push(projectData);
+            log(`[SAVE] Added new project: ${this.project.name} (token: ${this.project.token})`);
         }
 
         // Save to globalState
         await this.context.globalState.update('manta_all_projects', this.allProjects);
         await this.context.globalState.update('manta_current_project_token', this.project.token);
 
-        log(`Saved project: ${this.project.name} (User: ${currentUserId || 'Public'})`);
+        log(`[SAVE] Total projects in storage: ${this.allProjects.length}`);
+        log(`[SAVE] Projects: ${JSON.stringify(this.allProjects.map(p => ({ name: p.project.name, token: p.project.token, role: p.role })))}`);
     }
 
-    // Load all projects from storage
+    // Load all projects from storage (device-specific)
     loadAllProjects() {
         const saved = this.context.globalState.get<Array<{
-            userId?: string;
+            userId?: string; // Legacy field, ignored
             project: Project;
             role: UserRole;
             lastAccessed: Date;
@@ -305,42 +305,33 @@ export class ExtensionState {
 
         if (saved) {
             this.allProjects = saved;
-            log(`Loaded ${saved.length} projects from storage`);
+            log(`[LOAD] Loaded ${saved.length} projects from storage`);
+            log(`[LOAD] Projects: ${JSON.stringify(saved.map(p => ({ name: p.project.name, token: p.project.token, role: p.role })))}`);
+        } else {
+            log('[LOAD] No saved projects found in storage');
         }
     }
 
-    // Get all saved projects (sorted by last accessed)
+    // Get all saved projects (sorted by last accessed, device-specific - no user filtering)
     getAllProjects() {
-        const currentUserId = this.user ? this.user.id : undefined;
-
+        log(`[GET_ALL] Returning ${this.allProjects.length} projects`);
         return this.allProjects
-            .filter(p => {
-                // Show if it belongs to current user OR if it has no owner (legacy/public)
-                return p.userId === currentUserId || p.userId === undefined;
-            })
             .sort((a, b) => new Date(b.lastAccessed).getTime() - new Date(a.lastAccessed).getTime());
     }
 
-    // Switch to a different project
+    // Switch to a different project (device-specific, no user checks)
     async switchToProject(projectToken: string) {
-        // Look in allProjects (filter is applied in UI, but here we can be more permissive or strict)
-        // Let's rely on finding it in the array
         const projectData = this.allProjects.find(p => p.project.token === projectToken);
 
         if (projectData) {
-            // Optional security check: if we want to enforce ownership STRICTLY here:
-            if (projectData.userId && this.user && projectData.userId !== this.user.id) {
-                log(`Access denied: Project ${projectToken} belongs to another user.`);
-                return false;
-            }
-
             this.project = projectData.project;
             this.role = projectData.role;
             projectData.lastAccessed = new Date(); // Update access time
-            await this.saveCurrentProject(); // Will save with current User ID (claiming it if it was undefined)
-            log(`Switched to project: ${projectData.project.name}`);
+            await this.saveCurrentProject();
+            log(`[SWITCH] Switched to project: ${projectData.project.name} (token: ${projectToken})`);
             return true;
         }
+        log(`[SWITCH] Project not found: ${projectToken}`);
         return false;
     }
 
@@ -354,10 +345,11 @@ export class ExtensionState {
 
     // Remove project from history
     async removeProject(projectToken: string) {
-        // Remove from list
+        const beforeCount = this.allProjects.length;
         this.allProjects = this.allProjects.filter(p => p.project.token !== projectToken);
         await this.context.globalState.update('manta_all_projects', this.allProjects);
-        log(`Removed project: ${projectToken}`);
+        log(`[REMOVE] Removed project: ${projectToken}`);
+        log(`[REMOVE] Projects before: ${beforeCount}, after: ${this.allProjects.length}`);
     }
 
     // Restore last active project on startup

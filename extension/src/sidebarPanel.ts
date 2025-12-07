@@ -237,6 +237,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 task.assignee = user.name;
                 this.state.updateTask(task);
 
+                // Sync with server
+                await this.serverClient.assignTask(task.name, user.name);
+
                 vscode.window.showInformationMessage(`You picked up task: ${task.name}`);
 
                 // Open file if taskId resolves to a file in workspace
@@ -339,13 +342,44 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
 
     private async handleSwitchProject(projectId: string): Promise<void> {
-        if (!projectId) {
-            await this.state.leaveCurrentProject();
-        } else {
-            await this.state.switchToProject(projectId);
+        try {
+            if (!projectId) {
+                await this.state.leaveCurrentProject();
+                this.refresh();
+                return;
+            }
+
+            const user = this.state.getUser();
+            if (!user?.name) {
+                vscode.window.showErrorMessage('Please login with GitHub first');
+                return;
+            }
+
+            // Get the saved project to get the token
+            const savedProject = this.state.getAllProjects().find(p => p.project.token === projectId);
+            if (!savedProject) {
+                vscode.window.showErrorMessage('Project not found');
+                return;
+            }
+
+            vscode.window.showInformationMessage(`Rejoining ${savedProject.project.name}...`);
+
+            // Rejoin the session to get current role and member data from server
+            const sessionData = await this.serverClient.joinSession(projectId, user.name);
+
+            // Update state with fresh data from server
+            this.state.setProject(sessionData.project);
+            this.state.setRole(sessionData.role as import('../../shared/ts-types').UserRole); // Use role from server, not saved role
+
+            // Update the saved project with new data
+            await this.state.saveCurrentProject();
+
+            vscode.window.showInformationMessage(`Switched to ${sessionData.project.name} as ${sessionData.role}`);
             await this.scanForFileTasks();
+            this.refresh();
+        } catch (err) {
+            vscode.window.showErrorMessage(`Failed to switch project: ${err}`);
         }
-        this.refresh();
     }
 
     private async handleLeaveProject(projectId: string): Promise<void> {
@@ -425,12 +459,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 const analysis = await this.aiClient.analyzeCode(content, editor.document.languageId, filePath);
 
                 // 2. Submit to Server
-                const reviewId = require('uuid').v4(); // Generate dummy ID if package not avail, or trust server
+                // Use simple ID generation to avoid crypto dependency issues
+                const reviewId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+
                 const review: import('../../shared/ts-types').CodeReview = {
                     id: reviewId,
                     projectId: this.state.getProject()?.id || '',
                     submittedBy: user.id || user.name,
-                    authorId: user.id || user.name, // Fallback
+                    authorId: user.id || user.name,
                     submittedByName: user.name,
                     authorName: user.name,
                     files: [{
@@ -1061,6 +1097,39 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                     padding: 12px;
                     margin-bottom: 20px;
                 }
+                .logo-kraken {
+                    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+                    font-size: 32px;
+                    font-weight: 900;
+                    color: #40C4FF;
+                    letter-spacing: 4px;
+                    text-shadow: 0 0 15px rgba(64, 196, 255, 0.5);
+                    margin: 0;
+                    line-height: 1;
+                    text-transform: uppercase;
+                    text-align: center;
+                }
+                .logo-labs {
+                    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+                    font-size: 14px;
+                    font-weight: 500;
+                    color: rgba(64, 196, 255, 0.8);
+                    letter-spacing: 12px;
+                    margin-top: 5px;
+                    text-transform: uppercase;
+                    text-align: center;
+                    margin-left: 12px;
+                }
+                .gradient-footer {
+                    margin-top: 60px;
+                    width: 100%;
+                    height: 100px;
+                    background: linear-gradient(to top, rgba(255, 69, 0, 0.2), transparent);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 8px;
+                }
             </style>
         </head>
         <body>
@@ -1070,8 +1139,21 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             </div>
 
             <div class="section">
+                <h3>Navigation</h3>
+                <button onclick="switchProject()">Switch Project</button>
+                <button onclick="logout()">Logout</button>
+            </div>
+
+            <div class="section">
                 <h3>Actions</h3>
                 <button onclick="submitReview()" class="review-cta">📤 Submit Active File for Review</button>
+            </div>
+
+            <div class="section">
+                <h3>Team Members</h3>
+                <ul>
+                    ${(project.members || []).map((m: any) => `<li>${m.name} (${m.role})</li>`).join('')}
+                </ul>
             </div>
 
             <div class="section">
@@ -1091,6 +1173,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             }
             </div>
 
+            <div class="gradient-footer">
+                <div style="text-align: center;">
+                    <div class="logo-kraken">KRAKEN</div>
+                    <div class="logo-labs">LABS</div>
+                </div>
+            </div>
+            
             <script>
                 const vscode = acquireVsCodeApi();
                 function submitReview() {
