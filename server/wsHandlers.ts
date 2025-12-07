@@ -69,11 +69,12 @@ async function handleMessage(ws: WebSocket, data: any) {
                 );
 
                 // Add creator as first member with 'lead' role
+                const memberId = `${token}_${member}`; // Unique ID per session
                 await query(
                     `INSERT INTO members (id, session_id, name, role, status) 
                      VALUES ($1, $2, $3, $4, $5)
-                     ON CONFLICT (id) DO NOTHING`,
-                    [member, token, member, 'lead', 'online']
+                     ON CONFLICT (id) DO UPDATE SET status = 'online'`,
+                    [memberId, token, member, 'lead', 'online']
                 );
 
                 // Add client to clients array
@@ -143,11 +144,12 @@ async function handleMessage(ws: WebSocket, data: any) {
                 clients.push({ ws, token, member });
 
                 // Add member to DB
+                const memberId = `${token}_${member}`; // Unique ID per session
                 await query(
                     `INSERT INTO members (id, session_id, name, role, status) 
                      VALUES ($1, $2, $3, $4, $5)
-                     ON CONFLICT (id) DO NOTHING`,
-                    [member, token, member, 'Member', 'online']
+                     ON CONFLICT (id) DO UPDATE SET status = 'online'`,
+                    [memberId, token, member, 'Member', 'online']
                 );
 
                 // Fetch current state
