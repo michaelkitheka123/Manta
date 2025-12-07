@@ -211,17 +211,39 @@ async function handleMessage(ws: WebSocket, data: any) {
                 const task = data.payload;
                 const taskId = task.id || uuidv4();
 
+                // Fix: Format assignee to match DB requirement (token_username)
+                const formattedAssignee = task.assignee ? `${data.token}_${task.assignee}` : null;
+
                 // If task exists (by ID), update it. If not, insert.
                 await query(
                     `INSERT INTO tasks (id, session_id, title, status, assigned_to) 
                      VALUES ($1, $2, $3, $4, $5)
                      ON CONFLICT (id) DO UPDATE 
                      SET title = EXCLUDED.title, status = EXCLUDED.status, assigned_to = EXCLUDED.assigned_to`,
-                    [taskId, data.token, task.name, task.status || 'pending', task.assignee || null] // Fix: Use task.assignee
+                    [taskId, data.token, task.name, task.status || 'pending', formattedAssignee]
                 );
 
                 const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [data.token]);
                 broadcast(data.token, { type: 'tasks:update', payload: tasksRes.rows.map(dbToTask) });
+
+                // Add activity log if task was assigned
+                if (task.assignee) {
+                    await query(
+                        `UPDATE members 
+                         SET current_task = $1, status = 'online', 
+                             tasks_pending = CASE 
+                                WHEN $3 = 'pending' THEN tasks_pending + 1 
+                                ELSE tasks_pending 
+                             END
+                         WHERE id = $2 AND session_id = $4`,
+                        [taskId, formattedAssignee, 'pending', data.token]
+                    );
+
+                    // Fetch updated members to show new activity
+                    const membersRes = await query('SELECT * FROM members WHERE session_id = $1', [data.token]);
+                    broadcast(data.token, { type: 'members:update', payload: membersRes.rows.map(dbToMember) });
+                }
+
                 console.log(`[TASK CHORE] Created/Updated task "${task.name}" in ${data.token}`);
             } catch (err) {
                 console.error('Error creating task:', err);
