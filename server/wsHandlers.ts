@@ -16,12 +16,14 @@ export function setupWebSocket(server: any) {
     log('WebSocket server running.');
 
     wss.on('connection', (ws) => {
+        console.log('[WS CONNECTION] New WebSocket connection established');
+
         ws.on('message', async (msg) => {
             try {
                 const data = JSON.parse(msg.toString());
                 await handleMessage(ws, data);
             } catch (err) {
-                console.error('WS parse error:', err);
+                console.error('[WS PARSE ERROR]', err);
             }
         });
 
@@ -29,13 +31,18 @@ export function setupWebSocket(server: any) {
             // Remove client from list on disconnect
             const index = clients.findIndex(c => c.ws === ws);
             if (index !== -1) {
+                console.log(`[WS DISCONNECT] Client disconnected: ${clients[index].member} from session ${clients[index].token}`);
                 clients.splice(index, 1);
+            } else {
+                console.log('[WS DISCONNECT] Unknown client disconnected');
             }
         });
     });
 }
 
 async function handleMessage(ws: WebSocket, data: any) {
+    console.log(`[WS MESSAGE RECEIVED] Type: ${data.type}, Payload:`, JSON.stringify(data.payload || {}));
+
     switch (data.type) {
         case 'session:create':
             try {
@@ -150,6 +157,7 @@ async function handleMessage(ws: WebSocket, data: any) {
                 const reviewsRes = await query('SELECT * FROM reviews WHERE session_id = $1 ORDER BY created_at DESC', [token]);
 
                 // Broadcast update
+                console.log(`[MEMBERS BROADCAST] Broadcasting to session ${token}:`, JSON.stringify(membersRes.rows));
                 broadcast(token, { type: 'members:update', payload: membersRes.rows });
 
                 // Send initial state to joiner
@@ -167,6 +175,7 @@ async function handleMessage(ws: WebSocket, data: any) {
                     }
                 }));
 
+                console.log(`[SESSION JOINED] Sending to ${member}, members count: ${membersRes.rows.length}, members:`, JSON.stringify(membersRes.rows));
                 console.log(`[WS JOIN SUCCESS] ${member} joined session ${token}`);
             } catch (err) {
                 console.error('[WS JOIN ERROR]', err);
@@ -329,9 +338,15 @@ async function handleMessage(ws: WebSocket, data: any) {
 }
 
 function broadcast(token: string, message: any) {
-    clients.filter((c) => c.token === token).forEach((c) => {
+    const sessionClients = clients.filter((c) => c.token === token);
+    console.log(`[BROADCAST] Type: ${message.type}, Session: ${token}, Clients: ${sessionClients.length}, Message:`, JSON.stringify(message));
+
+    sessionClients.forEach((c) => {
         if (c.ws.readyState === WebSocket.OPEN) {
             c.ws.send(JSON.stringify(message));
+            console.log(`[BROADCAST SENT] To client: ${c.member}`);
+        } else {
+            console.log(`[BROADCAST SKIPPED] Client ${c.member} not ready (state: ${c.ws.readyState})`);
         }
     });
 }
