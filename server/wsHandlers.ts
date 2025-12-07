@@ -48,6 +48,10 @@ export function setupWebSocket(server: any) {
 }
 
 async function handleMessage(ws: WebSocket, data: any) {
+    // Identify member from socket connection
+    const client = clients.find(c => c.ws === ws);
+    const activeMember = client ? client.member : data.member;
+
     console.log(`[WS MESSAGE RECEIVED] Type: ${data.type}, Payload:`, JSON.stringify(data.payload || {}));
 
     switch (data.type) {
@@ -296,17 +300,16 @@ async function handleMessage(ws: WebSocket, data: any) {
         case 'file:saved':
             try {
                 const { filePath } = data.payload;
-                // Update member's current file
                 await query(
                     `UPDATE members SET current_file = $1, status = 'online' WHERE id = $2 AND session_id = $3`,
-                    [filePath, data.member, data.token]
+                    [filePath, activeMember, data.token]
                 );
 
                 // Broadcast update
                 const membersRes = await query('SELECT * FROM members WHERE session_id = $1', [data.token]);
                 broadcast(data.token, { type: 'members:update', payload: membersRes.rows.map(dbToMember) });
 
-                console.log(`[FILE ACTIVITY] ${data.member} focused/saved ${filePath}`);
+                console.log(`[FILE ACTIVITY] ${activeMember} focused/saved ${filePath}`);
             } catch (err) {
                 console.error('Error handling file activity:', err);
             }
@@ -317,7 +320,7 @@ async function handleMessage(ws: WebSocket, data: any) {
                 // Clear current file
                 await query(
                     `UPDATE members SET current_file = NULL, status = 'online' WHERE id = $1 AND session_id = $2`,
-                    [data.member, data.token]
+                    [activeMember, data.token]
                 );
 
                 const membersRes = await query('SELECT * FROM members WHERE session_id = $1', [data.token]);
@@ -427,7 +430,10 @@ function dbToTask(row: any): any {
         id: row.id,
         name: row.title,
         status: row.status,
-        assignee: row.assigned_to ? row.assigned_to.split('_').slice(1).join('_') : undefined, // Strip prefix
+        // Robust mapping: handle formatted (token_name) and unformatted (name) assignees
+        assignee: row.assigned_to
+            ? (row.assigned_to.includes('_') ? row.assigned_to.split('_').slice(1).join('_') : row.assigned_to)
+            : undefined,
         description: '' // DB doesn't have description yet
     };
 }
