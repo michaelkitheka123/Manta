@@ -9,7 +9,14 @@ interface Client {
     member: string;
 }
 
+interface QueuedMessage {
+    message: any;
+    timestamp: number;
+}
+
 const clients: Client[] = [];
+const messageQueues: Map<string, QueuedMessage[]> = new Map();
+const MAX_QUEUE_SIZE = 50;
 
 export function setupWebSocket(server: any) {
     const wss = new WebSocketServer({ server });
@@ -184,6 +191,9 @@ async function handleMessage(ws: WebSocket, data: any) {
                 console.log(`[SESSION JOINED] Sending to ${member}, members count: ${membersRes.rows.length}, members:`, JSON.stringify(membersRes.rows));
                 console.log(`[SESSION JOINED] Assigned role: ${memberRole} to ${member}`);
                 console.log(`[WS JOIN SUCCESS] ${member} joined session ${token}`);
+
+                // Replay any queued messages
+                replayQueuedMessages(ws, token, member);
             } catch (err) {
                 console.error('[WS JOIN ERROR]', err);
                 ws.send(JSON.stringify({
@@ -353,7 +363,35 @@ function broadcast(token: string, message: any) {
             c.ws.send(JSON.stringify(message));
             console.log(`[BROADCAST SENT] To client: ${c.member}`);
         } else {
-            console.log(`[BROADCAST SKIPPED] Client ${c.member} not ready (state: ${c.ws.readyState})`);
+            const queueKey = `${token}_${c.member}`;
+            if (!messageQueues.has(queueKey)) {
+                messageQueues.set(queueKey, []);
+            }
+            const queue = messageQueues.get(queueKey)!;
+            if (queue.length < MAX_QUEUE_SIZE) {
+                queue.push({ message, timestamp: Date.now() });
+                console.log(`[BROADCAST QUEUED] For ${c.member}, queue: ${queue.length}, state: ${c.ws.readyState}`);
+            } else {
+                queue.shift();
+                queue.push({ message, timestamp: Date.now() });
+                console.log(`[BROADCAST QUEUED] Queue full for ${c.member}, size: ${queue.length}`);
+            }
         }
     });
+}
+
+function replayQueuedMessages(ws: WebSocket, token: string, member: string) {
+    const queueKey = `${token}_${member}`;
+    const queue = messageQueues.get(queueKey);
+    if (queue && queue.length > 0) {
+        console.log(`[QUEUE REPLAY] Replaying ${queue.length} messages for ${member}`);
+        queue.forEach((qm, i) => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(qm.message));
+                console.log(`[QUEUE REPLAY] ${i + 1}/${queue.length} type: ${qm.message.type}`);
+            }
+        });
+        messageQueues.delete(queueKey);
+        console.log(`[QUEUE REPLAY] Cleared queue for ${member}`);
+    }
 }
