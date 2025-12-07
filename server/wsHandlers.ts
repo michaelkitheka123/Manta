@@ -158,6 +158,10 @@ async function handleMessage(ws: WebSocket, data: any) {
                 const tasksRes = await query('SELECT * FROM tasks WHERE session_id = $1', [token]);
                 const reviewsRes = await query('SELECT * FROM reviews WHERE session_id = $1 ORDER BY created_at DESC', [token]);
 
+                // Get the joining member's role from database
+                const joiningMember = membersRes.rows.find((m: any) => m.name === member);
+                const memberRole = joiningMember?.role || 'Implementer'; // Default to Implementer if not found
+
                 // Broadcast update
                 console.log(`[MEMBERS BROADCAST] Broadcasting to session ${token}:`, JSON.stringify(membersRes.rows));
                 broadcast(token, { type: 'members:update', payload: membersRes.rows });
@@ -173,11 +177,12 @@ async function handleMessage(ws: WebSocket, data: any) {
                             tasks: tasksRes.rows,
                             reviews: reviewsRes.rows
                         },
-                        role: 'Member'
+                        role: memberRole // Use actual role from database
                     }
                 }));
 
                 console.log(`[SESSION JOINED] Sending to ${member}, members count: ${membersRes.rows.length}, members:`, JSON.stringify(membersRes.rows));
+                console.log(`[SESSION JOINED] Assigned role: ${memberRole} to ${member}`);
                 console.log(`[WS JOIN SUCCESS] ${member} joined session ${token}`);
             } catch (err) {
                 console.error('[WS JOIN ERROR]', err);
