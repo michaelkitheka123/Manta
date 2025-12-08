@@ -27,10 +27,12 @@ export const initDB = async () => {
                 status VARCHAR(50),
                 commits_accepted INT DEFAULT 0,
                 tasks_completed INT DEFAULT 0,
+                tasks_pending INT DEFAULT 0,
                 lines_of_code INT DEFAULT 0,
                 avatar_url TEXT,
                 github_id VARCHAR(50),
-                current_file TEXT
+                current_file TEXT,
+                current_task TEXT
             );
 
             CREATE TABLE IF NOT EXISTS tasks (
@@ -58,6 +60,8 @@ export const initDB = async () => {
         try {
             await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS name TEXT;`);
             await pool.query(`ALTER TABLE members ADD COLUMN IF NOT EXISTS current_file TEXT;`);
+            await pool.query(`ALTER TABLE members ADD COLUMN IF NOT EXISTS tasks_pending INT DEFAULT 0;`);
+            await pool.query(`ALTER TABLE members ADD COLUMN IF NOT EXISTS current_task TEXT;`);
         } catch (e) {
             console.log('Migration note: ', e);
         }
