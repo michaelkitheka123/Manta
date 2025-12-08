@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import { Task, AISuggestion, Project, UserRole, DependencyGraph } from '../../shared/ts-types';
 import { log } from './utils';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 export interface User {
     id: string;
@@ -328,7 +331,21 @@ export class ExtensionState {
     }
 
     // Get all saved projects (sorted by last accessed, device-specific - no user filtering)
+    // Also validates existence on Desktop
     getAllProjects() {
+        const initialCount = this.allProjects.length;
+        this.allProjects = this.allProjects.filter(p => {
+            const projectPath = path.join(os.homedir(), 'Desktop', p.project.name);
+            return fs.existsSync(projectPath);
+        });
+
+        if (this.allProjects.length < initialCount) {
+            const removedCount = initialCount - this.allProjects.length;
+            log(`[GET_ALL] Removed ${removedCount} projects that no longer exist on Desktop`);
+            // Persist cleanup
+            this.context.globalState.update('manta_all_projects', this.allProjects);
+        }
+
         log(`[GET_ALL] Returning ${this.allProjects.length} projects`);
         return this.allProjects
             .sort((a, b) => new Date(b.lastAccessed).getTime() - new Date(a.lastAccessed).getTime());
