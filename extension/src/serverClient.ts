@@ -86,6 +86,7 @@ export class ServerClient {
                     this.state.setProject(data.payload.project);
                     this.state.setRole(data.payload.role);
                     this.state.setTasks(data.payload.project.tasks || []);
+                    this.state.setReviews(data.payload.project.reviews || []);
                     break;
 
                 case 'notification':

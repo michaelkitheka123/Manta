@@ -183,7 +183,7 @@ export class AIClient {
             try {
                 const prompt = `Analyze this ${language} code. Return a JSON object with: "summary" (string), "qualityScore" (0-100), "performanceScore" (0-100), "bottlenecks" (string array), "improvements" (string array). Code:\n\n${code}`;
                 const response = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${this.googleKey}`,
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.googleKey}`,
                     { contents: [{ parts: [{ text: prompt }] }] }
                 );
 

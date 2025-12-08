@@ -42,6 +42,7 @@ export interface Project {
     inviteToken?: string;
     tasks: Task[];
     members: Member[];
+    reviews?: import('./ts-types').CodeReview[]; // Optional to avoid breaking old clients immediately, but server sends it
 }
 
 export interface AISuggestion {
