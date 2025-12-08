@@ -986,44 +986,112 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                     <input type="text" id="newTaskName" placeholder="Task description">
                 </div>
                 <button onclick="createTask()">Add Task</button>
+            </div>
 
-function declineReview(id) {
-    vscode.postMessage({ type: 'declineReview', reviewId: id });
-}
+            <div class="section">
+                <h3>Team Members</h3>
+                <ul>
+                    ${(project.members || []).map((m: any) => `<li>${m.name} (${m.role})</li>`).join('')}
+                </ul>
+            </div>
+            
+            <div class="section">
+                <h3>Assigned Tasks</h3>
+                ${tasks.filter(t => t.assignee).length === 0 ? '<p>No assigned tasks.</p>' :
+                `<ul>${tasks.filter(t => t.assignee).map(t => `
+                    <li style="margin-bottom: 8px; border-left: 3px solid #64748b; padding-left: 8px;">
+                        <div><strong>${t.name}</strong></div>
+                        <div style="font-size: 0.9em; opacity: 0.8;">Assigned to: ${t.assignee}</div>
+                    </li>`).join('')}</ul>`
+            }
+            </div>
 
-function createTask() {
-    const name = document.getElementById('newTaskName').value;
-    if (name) {
-        vscode.postMessage({ type: 'createTask', taskName: name });
-        document.getElementById('newTaskName').value = '';
-    }
-}
+            <div class="section">
+                <h3>Unassigned Tasks</h3>
+                ${tasks.filter(t => !t.assignee).length === 0 ? '<p>No unassigned tasks.</p>' :
+                `<ul>${tasks.filter(t => !t.assignee).map((t, index) => `
+                    <li style="margin-bottom: 8px;">
+                        <div style="margin-bottom: 4px;"><strong>${t.name}</strong></div>
+                        <div style="display: flex;">
+                            <select id="assign-select-${index}" style="margin-right: 5px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border);">
+                                <option value="">Select Member...</option>
+                                ${(project.members || []).map((m: any) => `<option value="${m.name}">${m.name}</option>`).join('')}
+                            </select>
+                            <button onclick="assignTask('${t.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', 'assign-select-${index}')">Assign</button>
+                        </div>
+                    </li>`).join('')}</ul>`
+            }
+            </div>
 
-function assignTask(taskId, selectId) {
-    const select = document.getElementById(selectId);
-    const member = select.value;
-    if (member) {
-        vscode.postMessage({ type: 'assignTask', taskId: taskId, member: member });
-    }
-}
+            <div class="section">
+                <h3>Pending Reviews</h3>
+                ${pendingReviews.length === 0 ? '<p>No pending reviews.</p>' :
+                `<ul>${pendingReviews.map(r => `
+                    <li style="margin-bottom: 12px; border-left: 3px solid #40C4FF; padding-left: 10px;">
+                        <div style="font-weight: bold;">${r.filePath}</div>
+                        <div style="font-size: 0.9em; opacity: 0.8; margin-bottom: 4px;">By: ${r.authorName}</div>
+                        <div style="font-size: 0.85em; background: rgba(0,0,0,0.3); padding: 6px; border-radius: 4px; margin-bottom: 6px;">
+                            ${r.aiAnalysis?.summary || 'No AI summary available.'}
+                        </div>
+                        <div style="display: flex;">
+                            <button onclick="approveReview('${r.id}')" style="background: #22c55e;">Approve & Merge</button>
+                            <button onclick="declineReview('${r.id}')" style="background: #ef4444;">Decline</button>
+                        </div>
+                    </li>`).join('')}</ul>`
+            }
+            </div>
 
-function switchProject() {
-    vscode.postMessage({ type: 'switchProject' });
-}
+            <div class="gradient-footer">
+                <div style="text-align: center;">
+                    <div class="logo-kraken">KRAKEN</div>
+                    <div class="logo-labs">LABS</div>
+                </div>
+            </div>
 
-function logout() {
-    vscode.postMessage({ type: 'logout' });
-}
+            <script>
+                const vscode = acquireVsCodeApi();
 
-function copyToClipboard(text) {
-    if (text) {
-        vscode.postMessage({ type: 'copyToClipboard', value: text });
-    }
-}
+                function approveReview(id) {
+                    vscode.postMessage({ type: 'approveReview', reviewId: id });
+                }
 
-function submitReview() {
-    vscode.postMessage({ type: 'submitReview' });
-}
+                function declineReview(id) {
+                    vscode.postMessage({ type: 'declineReview', reviewId: id });
+                }
+
+                function createTask() {
+                    const name = document.getElementById('newTaskName').value;
+                    if (name) {
+                        vscode.postMessage({ type: 'createTask', taskName: name });
+                        document.getElementById('newTaskName').value = '';
+                    }
+                }
+
+                function assignTask(taskId, selectId) {
+                    const select = document.getElementById(selectId);
+                    const member = select.value;
+                    if (member) {
+                        vscode.postMessage({ type: 'assignTask', taskId: taskId, member: member });
+                    }
+                }
+
+                function switchProject() {
+                    vscode.postMessage({ type: 'switchProject' });
+                }
+
+                function logout() {
+                    vscode.postMessage({ type: 'logout' });
+                }
+
+                function copyToClipboard(text) {
+                    if (text) {
+                        vscode.postMessage({ type: 'copyToClipboard', value: text });
+                    }
+                }
+
+                function submitReview() {
+                    vscode.postMessage({ type: 'submitReview' });
+                }
 </script>
     </body>
     </html>`;
