@@ -477,6 +477,12 @@ export class ExtensionState {
     // -----------------------------
     // Code Review Management
     // -----------------------------
+    setReviews(reviews: import('../../shared/ts-types').CodeReview[]) {
+        this.pendingReviews = reviews;
+        log(`Synced ${reviews.length} reviews from server`);
+        this.notifyStateChange();
+    }
+
     addPendingReview(review: import('../../shared/ts-types').CodeReview) {
         this.pendingReviews.push(review);
         log(`Code review added: ${review.id}`);

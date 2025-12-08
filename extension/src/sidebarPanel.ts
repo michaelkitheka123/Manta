@@ -1261,14 +1261,20 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 const taskId = relativePath;
 
                 if (!this.state.hasTask(taskId)) {
-                    this.state.addTask({
-                        id: taskId,
-                        name: path.basename(relativePath),
-                        assignee: undefined, // Unassigned
-                        status: 'pending',
-                        description: 'Auto-generated task from file: ' + relativePath
-                    });
-                    newTasksCount++;
+                    // Also check if a task with the same name exists (avoid duplicates if ID differs)
+                    const allTasks = [...this.state.getTasks(), ...this.state.getAvailableTasks()];
+                    const duplicate = allTasks.some(t => t.name === path.basename(relativePath) && (!t.assignee || t.status === 'pending'));
+
+                    if (!duplicate) {
+                        this.state.addTask({
+                            id: taskId,
+                            name: path.basename(relativePath),
+                            assignee: undefined, // Unassigned
+                            status: 'pending',
+                            description: 'Auto-generated task from file: ' + relativePath
+                        });
+                        newTasksCount++;
+                    }
                 }
             }
 
