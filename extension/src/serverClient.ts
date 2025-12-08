@@ -81,6 +81,13 @@ export class ServerClient {
                     this.state.updateMembers(data.payload);
                     break;
 
+                case 'session:joined':
+                    log(`Joined session: ${data.payload.project.name}`);
+                    this.state.setProject(data.payload.project);
+                    this.state.setRole(data.payload.role);
+                    this.state.setTasks(data.payload.project.tasks || []);
+                    break;
+
                 case 'notification':
                     vscode.window.showInformationMessage(data.payload.message);
                     break;
