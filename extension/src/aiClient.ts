@@ -180,12 +180,25 @@ export class AIClient {
     async analyzeCode(code: string, language: string, filePath: string): Promise<import('../../shared/ts-types').AIAnalysis> {
         // Direct Google AI Path
         if (this.googleKey) {
+            let model = 'gemini-1.5-flash-001';
             try {
                 const prompt = `Analyze this ${language} code. Return a JSON object with: "summary" (string), "qualityScore" (0-100), "performanceScore" (0-100), "bottlenecks" (string array), "improvements" (string array). Code:\n\n${code}`;
-                const response = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.googleKey}`,
-                    { contents: [{ parts: [{ text: prompt }] }] }
-                );
+
+                let response;
+                try {
+                    response = await axios.post(
+                        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.googleKey}`,
+                        { contents: [{ parts: [{ text: prompt }] }] }
+                    );
+                } catch (e: any) {
+                    // Fallback
+                    log(`First attempt with ${model} failed: ${e.message}. Trying gemini-pro...`);
+                    model = 'gemini-pro';
+                    response = await axios.post(
+                        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.googleKey}`,
+                        { contents: [{ parts: [{ text: prompt }] }] }
+                    );
+                }
 
                 const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
                 if (!text) throw new Error('No response from Google AI');
@@ -197,14 +210,14 @@ export class AIClient {
                 // Ensure defaults
                 analysis.inlineComments = analysis.inlineComments || [];
 
-                log(`Google AI Code analysis completed for ${filePath}`);
+                log(`Google AI Code analysis completed for ${filePath} using ${model}`);
                 return analysis;
             } catch (err: any) {
                 const errorMsg = err.response?.data?.error?.message || err.message || err;
                 log(`Google AI Code analysis failed: ${errorMsg}`);
                 return {
                     bottlenecks: [], improvements: [], inlineComments: [],
-                    summary: `Direct AI Analysis failed: ${errorMsg}`, performanceScore: 0, qualityScore: 0
+                    summary: `Direct AI Analysis failed (${model}): ${errorMsg}`, performanceScore: 0, qualityScore: 0
                 };
             }
         }
