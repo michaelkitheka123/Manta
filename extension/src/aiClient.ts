@@ -75,7 +75,7 @@ export class AIClient {
             try {
                 const prompt = `Review this code for ${reviewType}. Provide suggestions as a JSON array of objects with properties: "line" (number), "description" (string), "severity" (string: 'info'|'warning'|'error'). Code:\n\n${content}`;
                 const response = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.googleKey}`,
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${this.googleKey}`,
                     { contents: [{ parts: [{ text: prompt }] }] }
                 );
 
@@ -183,7 +183,7 @@ export class AIClient {
             try {
                 const prompt = `Analyze this ${language} code. Return a JSON object with: "summary" (string), "qualityScore" (0-100), "performanceScore" (0-100), "bottlenecks" (string array), "improvements" (string array). Code:\n\n${code}`;
                 const response = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.googleKey}`,
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${this.googleKey}`,
                     { contents: [{ parts: [{ text: prompt }] }] }
                 );
 
@@ -248,7 +248,7 @@ export class AIClient {
                 // Modified prompt to ensure comments are added
                 const prompt = `Review this ${language} code. Add detailed inline comments explaining the logic and adding suggestions for best practices. Return the FULL code with comments integrated. Do NOT output markdown code blocks, just the code. Code:\n\n${code}`;
                 const response = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.googleKey}`,
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${this.googleKey}`,
                     { contents: [{ parts: [{ text: prompt }] }] }
                 );
 
