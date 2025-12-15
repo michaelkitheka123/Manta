@@ -73,11 +73,28 @@ export class AIClient {
         // Direct Google AI Path
         if (this.googleKey) {
             try {
-                const prompt = `Review this code for ${reviewType}. Provide suggestions as a JSON array of objects with properties: "line" (number), "description" (string), "severity" (string: 'info'|'warning'|'error'). Code:\n\n${content}`;
-                const response = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key=${this.googleKey}`,
-                    { contents: [{ parts: [{ text: prompt }] }] }
-                );
+                const prompt = `Review this code for ${reviewType}. Provide suggestions as a JSON array of objects with properties: "line" (number), "description" (string), "severity" (string: 'info'|'warning'|'error'). STRICT JSON ONLY. Code:\n\n${content}`;
+
+                const models = ['gemini-1.5-flash-001', 'gemini-1.5-flash', 'gemini-1.0-pro', 'gemini-pro'];
+                let response;
+                let lastError;
+
+                for (const model of models) {
+                    try {
+                        response = await axios.post(
+                            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.googleKey}`,
+                            { contents: [{ parts: [{ text: prompt }] }] }
+                        );
+                        if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                            break;
+                        }
+                    } catch (e: any) {
+                        lastError = e.message || e;
+                        log(`Review code attempt with ${model} failed: ${lastError}`);
+                    }
+                }
+
+                if (!response) throw new Error(`All models failed: ${lastError}`);
 
                 const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
                 // Try to extract JSON from markdown block
@@ -180,24 +197,32 @@ export class AIClient {
     async analyzeCode(code: string, language: string, filePath: string): Promise<import('../../shared/ts-types').AIAnalysis> {
         // Direct Google AI Path
         if (this.googleKey) {
-            let model = 'gemini-1.5-flash-001';
             try {
-                const prompt = `Analyze this ${language} code. Return a JSON object with: "summary" (string), "qualityScore" (0-100), "performanceScore" (0-100), "bottlenecks" (string array), "improvements" (string array). Code:\n\n${code}`;
-
+                const models = ['gemini-1.5-flash-001', 'gemini-1.5-flash', 'gemini-1.0-pro', 'gemini-pro'];
+                let model = models[0];
                 let response;
-                try {
-                    response = await axios.post(
-                        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.googleKey}`,
-                        { contents: [{ parts: [{ text: prompt }] }] }
-                    );
-                } catch (e: any) {
-                    // Fallback
-                    log(`First attempt with ${model} failed: ${e.message}. Trying gemini-pro...`);
-                    model = 'gemini-pro';
-                    response = await axios.post(
-                        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.googleKey}`,
-                        { contents: [{ parts: [{ text: prompt }] }] }
-                    );
+                let lastError;
+
+                const prompt = `Analyze this ${language} code. Return a JSON object with: "summary" (string), "qualityScore" (0-100), "performanceScore" (0-100), "bottlenecks" (string array), "improvements" (string array). STRICT JSON ONLY. No markdown, no explanation. Code:\n\n${code}`;
+
+                for (const m of models) {
+                    try {
+                        model = m;
+                        response = await axios.post(
+                            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.googleKey}`,
+                            { contents: [{ parts: [{ text: prompt }] }] }
+                        );
+                        if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                            break; // Success
+                        }
+                    } catch (e: any) {
+                        lastError = e.message || e;
+                        log(`Attempt with ${model} failed: ${lastError}`);
+                    }
+                }
+
+                if (!response || !response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                    throw new Error(`All models failed. Last error: ${lastError}`);
                 }
 
                 const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -254,16 +279,37 @@ export class AIClient {
         }
     }
 
+
+
     async generateInlineComments(code: string, language: string): Promise<string> {
         // Direct Google AI Path
         if (this.googleKey) {
             try {
                 // Modified prompt to ensure comments are added
                 const prompt = `Review this ${language} code. Add detailed inline comments explaining the logic and adding suggestions for best practices. Return the FULL code with comments integrated. Do NOT output markdown code blocks, just the code. Code:\n\n${code}`;
-                const response = await axios.post(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key=${this.googleKey}`,
-                    { contents: [{ parts: [{ text: prompt }] }] }
-                );
+
+                const models = ['gemini-1.5-flash-001', 'gemini-1.5-flash', 'gemini-1.0-pro', 'gemini-pro'];
+                let response;
+                let lastError;
+
+                for (const model of models) {
+                    try {
+                        response = await axios.post(
+                            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.googleKey}`,
+                            { contents: [{ parts: [{ text: prompt }] }] }
+                        );
+                        if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                            break;
+                        }
+                    } catch (e: any) {
+                        lastError = e.message || e;
+                        log(`Inline comments attempt with ${model} failed: ${lastError}`);
+                    }
+                }
+
+                if (!response) {
+                    throw new Error(`All models failed: ${lastError}`);
+                }
 
                 let text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
                 if (!text) return code;
@@ -310,10 +356,11 @@ export class AIClient {
                 qualityScore: 0
             };
 
-            log(`Multi-file analysis completed: Quality ${analysis.qualityScore}%, Performance ${analysis.performanceScore}%`);
+            log(`Multi-file analysis completed: Quality ${analysis.qualityScore
+                } %, Performance ${analysis.performanceScore}% `);
             return analysis;
         } catch (err) {
-            log(`Multi-file analysis failed: ${err}`);
+            log(`Multi - file analysis failed: ${err} `);
             return {
                 bottlenecks: [],
                 improvements: [],
