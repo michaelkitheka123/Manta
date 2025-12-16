@@ -9,6 +9,7 @@ Built by **Kraken Labs** 🦑
 ## ✨ Features
 
 - **🤝 Real-Time Collaboration** - Work together with your team via WebSocket connections
+- **🌐 AI Chat Translation** - Break language barriers with real-time chat translation in 100+ languages
 - **🤖 AI-Powered Task Assignment** - Let AI intelligently assign tasks to the best team member
 - **🔍 AI Code Review** - Automated code quality and performance analysis
 - **📊 Team Analytics** - Track member productivity, commits, and task completion

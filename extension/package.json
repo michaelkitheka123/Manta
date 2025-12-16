@@ -100,6 +100,19 @@
                     "type": "string",
                     "default": "AIzaSyAE2ZtJVU4pl57A3dHc8UXOca-IvxPq-oE",
                     "description": "Google Studio AI Token for direct Gemini API integration (Serverless Mode)."
+                },
+                "manta.preferredLanguage": {
+                    "type": "string",
+                    "default": "en",
+                    "enum": [
+                        "en",
+                        "es",
+                        "fr",
+                        "ja",
+                        "de",
+                        "sw"
+                    ],
+                    "description": "Preferred language for AI Chat translation."
                 }
             }
         }

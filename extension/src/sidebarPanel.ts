@@ -126,6 +126,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 case 'submitReview':
                     await this.handleSubmitReview();
                     break;
+                case 'sendChatMessage':
+                    await this.handleSendChatMessage(data.text, data.language);
+                    break;
             }
         });
     }
@@ -439,6 +442,50 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 this.refresh();
             }
         }
+    }
+
+    private async handleSendChatMessage(text: string, preferredLanguage: string): Promise<void> {
+        const user = this.state.getUser();
+        if (!user || !text.trim()) return;
+
+        // 1. Add original message
+        const msgId = Date.now().toString();
+        const originalMsg = {
+            id: msgId,
+            sender: user.name,
+            text: text,
+            timestamp: new Date()
+        };
+        this.state.addChatMessage(originalMsg);
+        this.refresh();
+
+        // 2. Translate if preferred language is different from 'en' (assuming input is English for now or auto-detect)
+        // For hackathon demo: Translate input to preferred language immediately to show "Your message translated for others"
+        // OR simple echo bot: "Teammate (AI)" replies in Spanish.
+
+        // Let's do: User sends message -> AI translates it to preferredLanguage (simulating what others see)
+        // AND AI replies in preferredLanguage.
+
+        try {
+            // Translate the sent message (simulation of outgoing translation)
+            if (preferredLanguage && preferredLanguage !== 'en') {
+                const translated = await this.aiClient.translateText(text, preferredLanguage);
+                // Update the last message with translation
+                // (Need update method in state, but I'll just add a "Translation Info" system message for now or rely on UI to show it)
+                // Actually, let's just create a new "AI Translated" message to show it works
+
+                const transMsg = {
+                    id: msgId + '_trans',
+                    sender: 'Manta AI Translator',
+                    text: `Translated to ${preferredLanguage}: ${translated}`,
+                    timestamp: new Date()
+                };
+                this.state.addChatMessage(transMsg);
+            }
+        } catch (e) {
+            log(`Chat processing failed: ${e}`);
+        }
+        this.refresh();
     }
 
     // AI Review
@@ -979,6 +1026,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 <button onclick="switchProject()">Switch Project</button>
                 <button onclick="logout()">Logout</button>
             </div>
+            
+            ${this.getChatHtml()}
 
             <div class="section">
                 <h3>Create New Task</h3>
@@ -1015,6 +1064,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                         <div style="display: flex;">
                             <select id="assign-select-${index}" style="margin-right: 5px; background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border);">
                                 <option value="">Select Member...</option>
+                                <option value="Gemini">Gemini</option>
                                 ${(project.members || []).map((m: any) => `<option value="${m.name}">${m.name}</option>`).join('')}
                             </select>
                             <button onclick="assignTask('${t.id.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', 'assign-select-${index}')">Assign</button>
@@ -1092,6 +1142,31 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 function submitReview() {
                     vscode.postMessage({ type: 'submitReview' });
                 }
+
+                // Chat Logic
+                function sendChatMessage() {
+                    const input = document.getElementById('chatInput');
+                    const langSelect = document.getElementById('chatLanguage');
+                    const text = input.value;
+                    const language = langSelect.value;
+                    
+                    if (text && text.trim().length > 0) {
+                        vscode.postMessage({ type: 'sendChatMessage', text: text, language: language });
+                        input.value = '';
+                    }
+                }
+                
+                function handleChatKeyPress(event) {
+                    if (event.key === 'Enter') {
+                        sendChatMessage();
+                    }
+                }
+                
+                // Scroll to bottom of chat
+                window.onload = function() {
+                    const chatMessages = document.getElementById('chatMessages');
+                    if(chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
 </script>
     </body>
     </html>`;
@@ -1167,6 +1242,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 <button onclick="submitReview()" class="review-cta">📤 Submit Active File for Review</button>
             </div>
 
+            ${this.getChatHtml()}
+
             <div class="section">
                 <h3>Team Members</h3>
                 <ul>
@@ -1208,6 +1285,31 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 }
                 function logout() { vscode.postMessage({ type: 'logout' }); }
                 function switchProject() { vscode.postMessage({ type: 'switchProject' }); }
+                
+                // Chat Logic
+                function sendChatMessage() {
+                    const input = document.getElementById('chatInput');
+                    const langSelect = document.getElementById('chatLanguage');
+                    const text = input.value;
+                    const language = langSelect.value;
+                    
+                    if (text && text.trim().length > 0) {
+                        vscode.postMessage({ type: 'sendChatMessage', text: text, language: language });
+                        input.value = '';
+                    }
+                }
+                
+                function handleChatKeyPress(event) {
+                    if (event.key === 'Enter') {
+                        sendChatMessage();
+                    }
+                }
+
+                // Scroll to bottom of chat
+                window.onload = function() {
+                    const chatMessages = document.getElementById('chatMessages');
+                    if(chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
             </script>
         </body>
         </html>`;
@@ -1242,6 +1344,90 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                 margin-bottom: 5px;
             }
             button:hover { background: var(--vscode-button-hoverBackground); }
+
+            /* Chat Styles */
+            .chat-container {
+                display: flex;
+                flex-direction: column;
+                height: 300px;
+                background: rgba(0, 0, 0, 0.2);
+                border-radius: 6px;
+                border: 1px solid rgba(255, 255, 255, 0.05);
+            }
+            .chat-messages {
+                flex: 1;
+                overflow-y: auto;
+                padding: 10px;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            .empty-chat {
+                text-align: center;
+                opacity: 0.5;
+                font-style: italic;
+                margin-top: 20px;
+            }
+            .message {
+                background: rgba(255, 255, 255, 0.05);
+                padding: 8px;
+                border-radius: 6px;
+                max-width: 90%;
+            }
+            .message.ai-message {
+                background: rgba(64, 196, 255, 0.1);
+                border-left: 3px solid #40C4FF;
+                align-self: flex-start;
+            }
+            .message-header {
+                display: flex;
+                justify-content: space-between;
+                font-size: 0.75em;
+                opacity: 0.7;
+                margin-bottom: 4px;
+            }
+            .sender { font-weight: bold; }
+            .message-body {
+                font-size: 0.9em;
+                line-height: 1.4;
+                word-wrap: break-word;
+            }
+            .chat-input-area {
+                padding: 8px;
+                background: rgba(0, 0, 0, 0.1);
+                border-top: 1px solid rgba(255, 255, 255, 0.05);
+            }
+            .language-select {
+                width: 100%;
+                margin-bottom: 6px;
+                background: var(--vscode-dropdown-background);
+                color: var(--vscode-dropdown-foreground);
+                border: 1px solid var(--vscode-dropdown-border);
+                padding: 4px;
+                border-radius: 4px;
+            }
+            .input-row {
+                display: flex;
+                gap: 6px;
+            }
+            #chatInput {
+                flex: 1;
+                background: var(--vscode-input-background);
+                color: var(--vscode-input-foreground);
+                border: 1px solid var(--vscode-input-border);
+                padding: 6px;
+                border-radius: 4px;
+            }
+            .send-btn {
+                padding: 0 12px;
+                margin: 0;
+                background: #40C4FF;
+                color: #000;
+                font-weight: bold;
+            }
+            .send-btn:hover {
+                background: #80D8FF;
+            }
         `;
     }
 
@@ -1311,6 +1497,44 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         } catch (err) {
             vscode.window.showErrorMessage('Failed to create project folder: ' + err);
         }
+    }
+
+    private getChatHtml(): string {
+        const messages = this.state.getChatMessages();
+
+        return `
+            <div class="section chat-section">
+                <h3>💬 Global Team Chat</h3>
+                <div class="chat-container">
+                    <div class="chat-messages" id="chatMessages">
+                        ${messages.length === 0 ? '<div class="empty-chat">Start a conversation...</div>' :
+                messages.map(m => `
+                            <div class="message ${m.sender === 'Manta AI Translator' ? 'ai-message' : ''}">
+                                <div class="message-header">
+                                    <span class="sender">${m.sender}</span>
+                                    <span class="time">${m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <div class="message-body">${m.text}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="chat-input-area">
+                        <select id="chatLanguage" class="language-select">
+                            <option value="en">English (Default)</option>
+                            <option value="es">Spanish (Español)</option>
+                            <option value="fr">French (Français)</option>
+                            <option value="ja">Japanese (日本語)</option>
+                            <option value="de">German (Deutsch)</option>
+                            <option value="sw">Swahili (Kiswahili)</option>
+                        </select>
+                        <div class="input-row">
+                            <input type="text" id="chatInput" placeholder="Type a message..." onkeypress="handleChatKeyPress(event)">
+                            <button onclick="sendChatMessage()" class="send-btn">➤</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     public refresh(): void {

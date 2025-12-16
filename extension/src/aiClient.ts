@@ -197,9 +197,9 @@ export class AIClient {
     async analyzeCode(code: string, language: string, filePath: string): Promise<import('../../shared/ts-types').AIAnalysis> {
         // Direct Google AI Path
         if (this.googleKey) {
+            const models = ['gemini-1.5-flash-001', 'gemini-1.5-flash', 'gemini-1.0-pro', 'gemini-pro'];
+            let model = models[0];
             try {
-                const models = ['gemini-1.5-flash-001', 'gemini-1.5-flash', 'gemini-1.0-pro', 'gemini-pro'];
-                let model = models[0];
                 let response;
                 let lastError;
 
@@ -341,6 +341,28 @@ export class AIClient {
         }
     }
 
+    async translateText(text: string, targetLanguage: string): Promise<string> {
+        if (!this.googleKey) {
+            log('Translate failed: No Google API Key');
+            return text;
+        }
+
+        try {
+            const prompt = `Translate the following text to ${targetLanguage}. Return ONLY the translated text, no markdown, no explanations.\n\nText: "${text}"`;
+
+            const response = await axios.post(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${this.googleKey}`,
+                { contents: [{ parts: [{ text: prompt }] }] }
+            );
+
+            const translated = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            return translated || text;
+        } catch (err) {
+            log(`Translation failed: ${err}`);
+            return text;
+        }
+    }
+
     async analyzeMultipleFiles(files: Array<{ path: string; code: string; language: string }>): Promise<import('../../shared/ts-types').AIAnalysis> {
         try {
             const res = await axios.post(`${this.baseUrl}/analyze/multiple`, {
@@ -356,8 +378,7 @@ export class AIClient {
                 qualityScore: 0
             };
 
-            log(`Multi-file analysis completed: Quality ${analysis.qualityScore
-                } %, Performance ${analysis.performanceScore}% `);
+            log(`Multi-file analysis completed: Quality ${analysis.qualityScore} %, Performance ${analysis.performanceScore}% `);
             return analysis;
         } catch (err) {
             log(`Multi - file analysis failed: ${err} `);

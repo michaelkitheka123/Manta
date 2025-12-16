@@ -44,6 +44,16 @@ export class ExtensionState {
     // Code reviews pending approval
     private pendingReviews: import('../../shared/ts-types').CodeReview[] = [];
 
+    // Chat messages
+    private chatMessages: Array<{
+        id: string;
+        sender: string;
+        text: string;
+        timestamp: Date;
+        translatedText?: string;
+        meta?: any;
+    }> = [];
+
     // Store all projects user has joined/created
     private allProjects: Array<{
         userId?: string; // Optional for backward compatibility
@@ -527,5 +537,23 @@ export class ExtensionState {
     removeReview(reviewId: string) {
         this.pendingReviews = this.pendingReviews.filter(r => r.id !== reviewId);
         log(`Review removed: ${reviewId}`);
+    }
+
+    // -----------------------------
+    // Chat Management
+    // -----------------------------
+    addChatMessage(message: { id: string; sender: string; text: string; timestamp: Date; translatedText?: string; meta?: any }) {
+        this.chatMessages.push(message);
+        log(`Chat message added from ${message.sender}`);
+        this.notifyStateChange();
+    }
+
+    getChatMessages() {
+        return this.chatMessages;
+    }
+
+    clearChatMessages() {
+        this.chatMessages = [];
+        this.notifyStateChange();
     }
 }
